@@ -1,0 +1,9 @@
+[build]
+  publish = "public"
+  command = ""
+
+[context.deploy-preview]
+  command = ""
+
+[context.branch-deploy]
+  command = ""
