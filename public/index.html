@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GTM AI Outbound Engine</title>
+<style>
+/* Design tokens ------------------------------------------------------------
+   Color: Ink #0F1620 (bg), Panel #161F2C (surfaces), Line #263242 (borders),
+   Text #E7ECF2 (primary) / #8B98A9 (muted), Accent #5B8DEF (identity blue),
+   Tier B #E0A64D (amber), Tier C #55627A (slate)
+   Type: "Space Grotesk" for headings/nav, "IBM Plex Sans" for body,
+   "IBM Plex Mono" for scores, signals, code, evidence strings.
+   Layout: fixed left rail + main content, left-aligned, dense data tables —
+   this reads as an internal ops console, not a marketing page.
+---------------------------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --ink: #0F1620;
+  --panel: #161F2C;
+  --panel-2: #1B2634;
+  --line: #263242;
+  --text: #E7ECF2;
+  --muted: #8B98A9;
+  --accent: #5B8DEF;
+  --accent-dim: #2E4270;
+  --tier-a: #5B8DEF;
+  --tier-b: #E0A64D;
+  --tier-c: #55627A;
+  --good: #4FBF8B;
+  --warn: #E0A64D;
+  --bad: #E1685C;
+  --font-head: 'Space Grotesk', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+::selection { background: var(--accent-dim); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: flex; min-height: 100vh; }
+
+/* --- Rail --- */
+.rail {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 22px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.rail-brand {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.rail-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+.rail-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-dim); color: var(--accent);
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 4px 8px; border-radius: 4px; margin-bottom: 8px;
+}
+.rail-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.rail-badge.live { background: rgba(79,191,139,.16); color: var(--good); }
+.rail-badge.live::before { background: var(--good); }
+.rail nav { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; }
+.rail nav button {
+  all: unset; cursor: pointer;
+  color: var(--muted); font-family: var(--font-body); font-size: 13.5px; font-weight: 500;
+  padding: 9px 10px; border-radius: 6px; display: flex; align-items: center; gap: 9px;
+}
+.rail nav button:hover { background: var(--panel-2); color: var(--text); }
+.rail nav button.active { background: var(--accent-dim); color: var(--text); }
+.rail nav button .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
+
+/* --- Main --- */
+.main { flex: 1; min-width: 0; padding: 30px 40px 60px; max-width: 1180px; }
+.page-head { margin-bottom: 26px; }
+.page-head h1 { font-family: var(--font-head); font-size: 22px; margin: 0 0 4px; font-weight: 600; }
+.page-head p { color: var(--muted); margin: 0; max-width: 680px; }
+
+/* --- KPI grid --- */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 26px; }
+.kpi {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 16px 16px 14px;
+}
+.kpi .v { font-family: var(--font-mono); font-size: 26px; font-weight: 600; }
+.kpi .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.kpi .v.tier-a { color: var(--tier-a); }
+.kpi .v.tier-b { color: var(--tier-b); }
+.kpi .v.tier-c { color: var(--tier-c); }
+
+/* --- Panels / tables --- */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 22px; overflow: hidden; }
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px; border-bottom: 1px solid var(--line); gap: 12px; flex-wrap: wrap;
+}
+.panel-head h2 { font-family: var(--font-head); font-size: 14px; font-weight: 600; margin: 0; }
+.panel-head .hint { color: var(--muted); font-size: 12px; }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 500; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+td { padding: 11px 16px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-2); }
+.score { font-family: var(--font-mono); font-weight: 600; }
+
+.tier-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 5px;
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
+}
+.tier-pill.A { background: rgba(91,141,239,.16); color: var(--tier-a); }
+.tier-pill.B { background: rgba(224,166,77,.16); color: var(--tier-b); }
+.tier-pill.C { background: rgba(85,98,122,.2); color: var(--tier-c); }
+
+.tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; display: inline-block; }
+.tag.route-bdr { color: var(--good); border-color: rgba(79,191,139,.35); }
+.tag.route-enrich { color: var(--warn); border-color: rgba(224,166,77,.35); }
+.tag.route-nurture { color: var(--accent); border-color: rgba(91,141,239,.35); }
+.tag.route-suppress { color: var(--bad); border-color: rgba(225,104,92,.35); }
+
+/* --- Detail view --- */
+.detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
+.field-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.field-row:last-child { border-bottom: none; }
+.field-row .k { color: var(--muted); }
+.field-row .val { text-align: right; max-width: 62%; }
+.body-pad { padding: 16px; }
+.evidence-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel-2); }
+.evidence-card:last-child { margin-bottom: 0; }
+.evidence-card .row1 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.evidence-card .name { font-weight: 600; font-size: 13px; }
+.evidence-card .name.off { color: var(--muted); font-weight: 500; }
+.evidence-card .meta { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.evidence-card .evidence-text { font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-top: 4px; }
+.pill-conf { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; }
+.pill-conf.high { background: rgba(79,191,139,.16); color: var(--good); }
+.pill-conf.medium { background: rgba(224,166,77,.16); color: var(--warn); }
+.pill-conf.low, .pill-conf\.n\/a { background: rgba(85,98,122,.2); color: var(--muted); }
+.reasoning-block { font-size: 13.5px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.reasoning-block:last-child { border-bottom: none; }
+.reasoning-block .k { color: var(--muted); font-size: 11.5px; text-transform: none; margin-bottom: 4px; }
+.inference-tag { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; margin-right: 6px; letter-spacing: .02em; }
+.inference-tag.INFERENCE { background: rgba(224,166,77,.18); color: var(--warn); }
+.inference-tag.FACT { background: rgba(79,191,139,.16); color: var(--good); }
+.outreach-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 14px; font-size: 13.5px; }
+.outreach-card .subj { font-weight: 600; margin-bottom: 8px; }
+.back-btn { all: unset; cursor: pointer; color: var(--accent); font-size: 13px; margin-bottom: 16px; display: inline-block; }
+
+.score-bars { display: flex; flex-direction: column; gap: 10px; }
+.score-bar-row { }
+.score-bar-row .lbl { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
+.score-bar-row .lbl .n { font-family: var(--font-mono); color: var(--text); }
+.bar-track { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+.explain-list { list-style: none; margin: 0; padding: 0; font-family: var(--font-mono); font-size: 12px; }
+.explain-list li { padding: 4px 0; color: var(--muted); border-bottom: 1px dashed var(--line); }
+.explain-list li:last-child { border-bottom: none; }
+.explain-list li.pos { color: var(--good); }
+
+/* --- Architecture --- */
+.arch-flow { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.9; white-space: pre-wrap; overflow-x: auto; padding: 18px 20px; }
+.arch-flow .node { color: var(--text); }
+.arch-flow .gate { color: var(--warn); }
+.arch-flow .arrow { color: var(--muted); }
+.stack-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px; }
+.stack-col h3 { font-family: var(--font-head); font-size: 13px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.stack-col .stack-note { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
+.stack-col ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.stack-col ul li { margin-bottom: 6px; }
+.stack-col ul li .live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background: var(--good); margin-right:6px; }
+.stack-col ul li .design-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background: var(--muted); margin-right:6px; }
+
+.filter-row { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.filter-row button {
+  all: unset; cursor: pointer; font-size: 12px; font-family: var(--font-mono);
+  padding: 5px 10px; border-radius: 5px; color: var(--muted); border: 1px solid var(--line);
+}
+.filter-row button.active { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+
+.simulated-note {
+  font-size: 12px; color: var(--muted); background: var(--panel-2);
+  border: 1px dashed var(--line); border-radius: 6px; padding: 9px 12px; margin-bottom: 18px;
+}
+.icp-note {
+  font-size: 12.5px; color: var(--warn); background: rgba(224,166,77,.08);
+  border: 1px dashed rgba(224,166,77,.4); border-radius: 6px; padding: 10px 12px; margin-bottom: 18px;
+}
+
+/* --- MCP tool cards --- */
+.mcp-tool { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+.mcp-tool:last-child { margin-bottom: 0; }
+.mcp-tool-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--panel-2); flex-wrap: wrap; }
+.mcp-tool-head .tname { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
+.perm-pill { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: .02em; }
+.perm-pill.READ { background: rgba(91,141,239,.16); color: var(--accent); }
+.perm-pill.WRITE { background: rgba(225,104,92,.16); color: var(--bad); }
+.approval-pill { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 4px; background: rgba(224,166,77,.16); color: var(--warn); }
+.mcp-tool-body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 12.5px; }
+.mcp-tool-body .k { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
+.mcp-tool-body .v { font-family: var(--font-mono); font-size: 12px; }
+.mcp-tool-body .full { grid-column: 1 / -1; }
+
+/* --- ICP config --- */
+.cfg-row { display: grid; grid-template-columns: 1fr 120px; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.cfg-row:last-child { border-bottom: none; }
+.cfg-row input[type="number"], .cfg-row input[type="text"] {
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 5px; padding: 6px 8px; font-family: var(--font-mono); font-size: 12.5px; width: 100%;
+}
+.cfg-checks { display: flex; flex-wrap: wrap; gap: 8px; }
+.cfg-chip { font-family: var(--font-mono); font-size: 11.5px; padding: 4px 9px; border-radius: 5px; border: 1px solid var(--line); color: var(--muted); cursor: pointer; user-select: none; }
+.cfg-chip.on { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+.cfg-actions { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.btn { all: unset; cursor: pointer; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); color: var(--text); }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.btn.small { padding: 5px 10px; font-size: 11.5px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* --- Sequence --- */
+.seq-step { display: flex; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.seq-step:last-child { border-bottom: none; }
+.seq-day { font-family: var(--font-mono); font-size: 12px; color: var(--accent); width: 64px; flex-shrink: 0; padding-top: 2px; }
+.seq-body .chan { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.seq-body .desc { color: var(--muted); font-size: 12.5px; }
+.feedback-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.feedback-item { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; font-size: 12.5px; }
+.feedback-item .trig { font-family: var(--font-mono); color: var(--warn); font-size: 11px; margin-bottom: 3px; }
+
+.jc-box { border: 1px solid rgba(91,141,239,.35); background: rgba(91,141,239,.06); border-radius: 8px; padding: 14px; }
+.jc-box h3 { margin: 0 0 8px; font-family: var(--font-head); font-size: 13px; }
+.jc-box ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text); }
+.jc-box ul li { margin-bottom: 6px; }
+.jc-box ul li b { color: var(--accent); }
+
+.claude-live-box { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; margin-top: 10px; }
+.claude-live-box textarea, .claude-live-box input[type="password"] {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 8px; font-family: var(--font-mono); font-size: 12px;
+}
+.claude-status { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+.claude-status.err { color: var(--bad); }
+.claude-status.ok { color: var(--good); }
+
+@media (max-width: 900px) {
+  .app { flex-direction: column; }
+  .rail { position: static; width: 100%; height: auto; }
+  .main { padding: 20px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .detail-grid { grid-template-columns: 1fr; }
+  .mcp-tool-body { grid-template-columns: 1fr; }
+  .feedback-grid { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="rail-brand">GTM AI Outbound Engine</div>
+    <div class="rail-sub">Signal-based account qualification</div>
+    <div class="rail-badge">Demo Mode · seeded dataset</div>
+    <div id="ai-mode-badge"></div>
+    <nav>
+      <button data-page="dashboard" class="active"><span class="dot"></span>Dashboard</button>
+      <button data-page="accounts"><span class="dot"></span>Accounts</button>
+      <button data-page="signals"><span class="dot"></span>Signals</button>
+      <button data-page="routing"><span class="dot"></span>Routing</button>
+      <button data-page="config"><span class="dot"></span>ICP Config</button>
+      <button data-page="architecture"><span class="dot"></span>Architecture</button>
+    </nav>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<script>
+/* ==========================================================================
+   GTM AI OUTBOUND ENGINE — core engine
+   Deterministic enrichment, signal detection, scoring, persona, routing.
+   AI Research & Reasoning defaults to a deterministic simulator that returns
+   the exact JSON shape a Claude API call would produce. Optionally, from the
+   Architecture tab, a viewer can supply their own Anthropic API key to run a
+   real Claude call for a single account's reasoning step (client-side only,
+   never persisted or sent anywhere but api.anthropic.com). Scoring and
+   routing are never touched by that call — see "Design principle" below.
+
+   DESIGN PRINCIPLE: the model is never allowed to set the ICP score or the
+   routing decision. Those stay deterministic and reproducible because the
+   business reason for scoring at all is to avoid spending model compute and
+   seller attention on low-quality accounts — an LLM deciding its own
+   priority would defeat that purpose. AI is used only where unstructured
+   reasoning adds value: synthesizing evidence, forming a pain hypothesis,
+   flagging missing information, and drafting grounded personalization.
+   ========================================================================== */
+
+// ---------------------------------------------------------------------------
+// PHASE 1/2 — TARGET ACCOUNT INPUT + ENRICHMENT (demo dataset)
+// In production this object is what Clay's webhook (POST /api/webhook/clay)
+// would populate. Unknown fields are explicit "unknown" — never fabricated.
+// ---------------------------------------------------------------------------
+const COMPANIES = [
+  { id: "acc_01", company_name: "Northbeam Logistics", website: "northbeamlogistics.com", industry: "Freight & Supply Chain Tech", employee_count: 640, headquarters: "Austin, TX", countries_of_operation: ["US", "MX", "CA"], company_description: "Cloud dispatch and fleet-visibility platform for mid-market freight carriers.", estimated_growth: "+38% headcount YoY", technology_context: "Google Workspace, Okta trial expired Q2, mixed Mac/Windows fleet", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-22", contact: { name: "Priya Nair", title: "Director of IT", email: "p.nair@northbeamlogistics.com", confidence: "high" } },
+  { id: "acc_02", company_name: "Verdant Health Analytics", website: "verdanthealth.io", industry: "Healthcare SaaS", employee_count: 410, headquarters: "Boston, MA", countries_of_operation: ["US"], company_description: "Clinical data analytics for regional hospital networks, mostly office-based with a small contractor pool.", estimated_growth: "+22% headcount YoY", technology_context: "HIPAA compliance program active, Azure AD in place, MDM gaps on contractor devices", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-08-19", contact: { name: "Marcus Webb", title: "VP IT & Security", email: "m.webb@verdanthealth.io", confidence: "high" } },
+  { id: "acc_03", company_name: "Solace Home Goods", website: "solacehome.com", industry: "E-commerce / DTC Retail", employee_count: 180, headquarters: "Columbus, OH", countries_of_operation: ["US"], company_description: "Direct-to-consumer home goods brand, warehouse + small corporate team.", estimated_growth: "flat", technology_context: "Shopify, Google Workspace, no dedicated IT hire", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-08-10", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_04", company_name: "Kestrel Robotics", website: "kestrelrobotics.ai", industry: "Industrial Automation", employee_count: 890, headquarters: "Pittsburgh, PA", countries_of_operation: ["US", "DE", "JP"], company_description: "Warehouse robotics manufacturer expanding into European and APAC fulfillment centers.", estimated_growth: "+45% headcount YoY", technology_context: "Hybrid on-prem/cloud identity, hiring Head of Corporate IT, engineering on Linux/Mac mix", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-27", contact: { name: "Elena Farkas", title: "Head of IT", email: "e.farkas@kestrelrobotics.ai", confidence: "high" } },
+  { id: "acc_05", company_name: "Milltown Credit Union", website: "milltowncu.org", industry: "Financial Services", employee_count: 260, headquarters: "Grand Rapids, MI", countries_of_operation: ["US"], company_description: "Regional credit union, branch + back-office staff.", estimated_growth: "+4% headcount YoY", technology_context: "On-prem AD, no cloud IAM migration announced", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-07-30", contact: { name: "Tom Alvarez", title: "IT Operations Director", email: "t.alvarez@milltowncu.org", confidence: "medium" } },
+  { id: "acc_06", company_name: "Fernhill Design Studio", website: "fernhillstudio.com", industry: "Creative Agency", employee_count: 45, headquarters: "Portland, OR", countries_of_operation: ["US"], company_description: "Boutique branding and design agency.", estimated_growth: "unknown", technology_context: "unknown", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-06-18", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_07", company_name: "Aurelia Biotech", website: "aureliabio.com", industry: "Life Sciences", employee_count: 720, headquarters: "San Diego, CA", countries_of_operation: ["US", "UK", "CH"], company_description: "Clinical-stage biotech opening a European R&D site.", estimated_growth: "+31% headcount YoY", technology_context: "GxP compliance pressure, actively posting for Identity & Access Management lead, BYOD policy undefined", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-29", contact: { name: "Daniel Osei", title: "CIO", email: "d.osei@aureliabio.com", confidence: "high" } },
+  { id: "acc_08", company_name: "Redline Motorsports Parts", website: "redlinemsp.com", industry: "Automotive Retail", employee_count: 95, headquarters: "Charlotte, NC", countries_of_operation: ["US"], company_description: "Aftermarket auto parts distributor.", estimated_growth: "flat", technology_context: "Legacy on-prem ERP, no cloud identity layer", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-05-12", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_09", company_name: "Bramblewood Legal Group", website: "bramblewoodlaw.com", industry: "Legal Services", employee_count: 310, headquarters: "Chicago, IL", countries_of_operation: ["US", "UK"], company_description: "Mid-size law firm with a new London office.", estimated_growth: "+18% headcount YoY", technology_context: "Recently mandated MFA firm-wide after a phishing incident, evaluating device management vendors", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-25", contact: { name: "Rachel Kim", title: "Director of IT", email: "r.kim@bramblewoodlaw.com", confidence: "high" } },
+  { id: "acc_10", company_name: "Coastal Grain Co-op", website: "coastalgrain.coop", industry: "Agriculture", employee_count: 150, headquarters: "Fargo, ND", countries_of_operation: ["US"], company_description: "Regional grain co-op, mostly field and elevator staff.", estimated_growth: "unknown", technology_context: "unknown", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-05-30", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_11", company_name: "Ironclad Fabrication", website: "ironcladfab.com", industry: "Manufacturing", employee_count: 520, headquarters: "Cleveland, OH", countries_of_operation: ["US", "MX"], company_description: "Metal fabrication with a new Monterrey plant.", estimated_growth: "+9% headcount YoY", technology_context: "Plant floor + corporate split identity systems, hiring a Systems Administrator", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: true, last_enriched: "2026-08-05", contact: { name: "Greg Sato", title: "IT Manager", email: "g.sato@ironcladfab.com", confidence: "medium" } },
+  { id: "acc_12", company_name: "Vantage Point Consulting", website: "vantagepointco.com", industry: "Professional Services", employee_count: 275, headquarters: "Denver, CO", countries_of_operation: ["US", "CA", "UK", "SG"], company_description: "Boutique strategy consultancy, fully distributed team across four countries.", estimated_growth: "+27% headcount YoY", technology_context: "Fully remote-first, contractor-heavy, no unified device management, actively posting Security Director role", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-30", contact: { name: "Ana Beltrán", title: "VP IT", email: "a.beltran@vantagepointco.com", confidence: "high" } },
+  { id: "acc_13", company_name: "Pinewood Family Dental", website: "pinewooddental.com", industry: "Healthcare (Small Practice)", employee_count: 22, headquarters: "Boise, ID", countries_of_operation: ["US"], company_description: "Local multi-chair dental practice.", estimated_growth: "flat", technology_context: "unknown", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-04-22", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_14", company_name: "Skylark EdTech", website: "skylarked.com", industry: "Education Technology", employee_count: 480, headquarters: "Seattle, WA", countries_of_operation: ["US", "CA", "AU"], company_description: "K-12 learning platform expanding into the Australian market.", estimated_growth: "+9% headcount YoY", technology_context: "Google Workspace, student-data compliance pressure, IT hiring freeze reported this quarter", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-14", contact: { name: "Owen Park", title: "Head of IT", email: "o.park@skylarked.com", confidence: "medium" } },
+  { id: "acc_15", company_name: "Redstone Municipal Utilities", website: "redstoneutilities.gov", industry: "Public Sector / Utilities", employee_count: 340, headquarters: "Redstone County, CO", countries_of_operation: ["US"], company_description: "County utilities authority.", estimated_growth: "unknown", technology_context: "Procurement cycle is annual/RFP-driven, unknown current identity stack", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-03-11", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_16", company_name: "Halcyon Games Studio", website: "halcyongames.dev", industry: "Gaming / Interactive Media", employee_count: 210, headquarters: "Montreal, QC", countries_of_operation: ["CA", "US", "FR"], company_description: "Indie-to-midsize game studio, distributed dev team across three countries.", estimated_growth: "+9% headcount YoY", technology_context: "Remote-first since founding, BYOD across contractors and staff, evaluating identity providers per recent job post for 'IT & Security Lead'", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-08-28", contact: { name: "Jules Tremblay", title: "IT & Security Lead (open req)", email: "unknown", confidence: "medium" } }
+];
+
+const TODAY = new Date("2026-09-03T00:00:00Z");
+
+// ---------------------------------------------------------------------------
+// PHASE 4 — configurable scoring weights + ICP thresholds
+// Editable at runtime from the "ICP Config" tab. Nothing here should be read
+// as JumpCloud's actual internal qualification criteria — see the notice on
+// that tab.
+// ---------------------------------------------------------------------------
+const DEFAULT_ICP_CONFIG = {
+  headcount_min: 200,
+  headcount_max: 2000,
+  tierA_threshold: 80,
+  tierB_threshold: 60,
+  min_signals_for_evidence: 2,
+  target_industries: ["Freight & Supply Chain Tech", "Healthcare SaaS", "Industrial Automation",
+    "Life Sciences", "Legal Services", "Professional Services", "Education Technology",
+    "Gaming / Interactive Media", "Manufacturing", "Financial Services", "Healthcare (Small Practice)"],
+  target_geos: ["US", "CA", "UK", "DE", "CH", "AU", "SG", "FR", "MX", "JP"],
+  weights: {
+    company_fit: { headcount_band: 15, relevant_profile: 10, multi_location: 10, relevant_geo: 5 },
+    signals: { it_security_hiring: 15, remote_hybrid: 10, growing_headcount: 10, geo_expansion: 5 },
+    contact: { relevant_decision_maker: 10, contact_available: 5, responsibilities_match: 5 }
+  }
+};
+
+// Mutable working copy — the ICP Config tab edits this, then "Apply" re-runs
+// the whole pipeline against the new assumptions.
+let ICP_CONFIG = JSON.parse(JSON.stringify(DEFAULT_ICP_CONFIG));
+
+// ---------------------------------------------------------------------------
+// PHASE 3 — SIGNAL ENGINE
+// Every signal cites the enrichment field it was derived from — nothing here
+// is invented beyond the seeded demo record. Each signal also carries an
+// observed date + freshness so the UI can show how current the evidence is.
+// ---------------------------------------------------------------------------
+function daysSince(dateStr) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  return Math.round((TODAY - d) / 86400000);
+}
+
+function detectSignals(c) {
+  const signals = [];
+  const push = (name, detected, evidence, confidence, source) =>
+    signals.push({
+      signal_name: name, detected, evidence, confidence, source,
+      observed_date: c.last_enriched, freshness_days: daysSince(c.last_enriched)
+    });
+
+  push("Remote or distributed workforce", c.remote_or_hybrid_signal,
+    c.remote_or_hybrid_signal ? `Workforce flagged remote/hybrid — ${c.technology_context}` : "No remote/hybrid indicator on file",
+    c.remote_or_hybrid_signal ? "high" : "n/a", "enrichment.remote_or_hybrid_signal");
+
+  push("IT hiring", c.it_hiring_signal,
+    c.it_hiring_signal ? `Open or recent IT req referenced in tech context: "${c.technology_context}"` : "No open IT req detected",
+    c.it_hiring_signal ? "high" : "n/a", "enrichment.it_hiring_signal");
+
+  push("Cybersecurity / IAM hiring", c.security_hiring_signal,
+    c.security_hiring_signal ? `Security/IAM hiring or initiative referenced: "${c.technology_context}"` : "No security hiring signal detected",
+    c.security_hiring_signal ? "high" : "n/a", "enrichment.security_hiring_signal");
+
+  push("Geographic expansion", c.geographic_expansion_signal,
+    c.geographic_expansion_signal ? `Operating across ${c.countries_of_operation.length} countries: ${c.countries_of_operation.join(", ")}` : "Single-country footprint",
+    c.geographic_expansion_signal ? "medium" : "n/a", "enrichment.countries_of_operation");
+
+  const growthPct = parseGrowth(c.estimated_growth);
+  push("Rapid headcount growth", growthPct !== null && growthPct >= 15,
+    growthPct !== null ? `Estimated growth: ${c.estimated_growth}` : "Growth not reported",
+    growthPct !== null ? (growthPct >= 25 ? "high" : "medium") : "n/a", "enrichment.estimated_growth");
+
+  push("Multiple offices or countries", c.countries_of_operation.length > 1,
+    `${c.countries_of_operation.length} countries of operation on file`,
+    c.countries_of_operation.length > 1 ? "high" : "n/a", "enrichment.countries_of_operation");
+
+  return signals;
+}
+
+function parseGrowth(str) {
+  const m = /(\+?)(\d+)%/.exec(str || "");
+  return m ? parseInt(m[2], 10) : null;
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 4 — ICP SCORING (deterministic — the LLM never sets this)
+// ---------------------------------------------------------------------------
+function scoreAccount(c, signals) {
+  const w = ICP_CONFIG.weights;
+  const notes = [];
+  let fit = 0;
+
+  if (c.employee_count >= ICP_CONFIG.headcount_min && c.employee_count <= ICP_CONFIG.headcount_max) { fit += w.company_fit.headcount_band; notes.push(`+${w.company_fit.headcount_band} headcount in ${ICP_CONFIG.headcount_min}–${ICP_CONFIG.headcount_max} band (${c.employee_count})`); }
+  else notes.push(`+0 headcount outside ${ICP_CONFIG.headcount_min}–${ICP_CONFIG.headcount_max} band (${c.employee_count})`);
+
+  if (ICP_CONFIG.target_industries.includes(c.industry)) { fit += w.company_fit.relevant_profile; notes.push(`+${w.company_fit.relevant_profile} B2B/modern-workforce profile (${c.industry})`); }
+  else notes.push(`+0 industry profile not a strong match (${c.industry})`);
+
+  if (c.countries_of_operation.length > 1) { fit += w.company_fit.multi_location; notes.push(`+${w.company_fit.multi_location} multi-location (${c.countries_of_operation.length} countries)`); }
+  else notes.push(`+0 single location`);
+
+  const relevantGeo = c.countries_of_operation.some(g => ICP_CONFIG.target_geos.includes(g));
+  if (relevantGeo) { fit += w.company_fit.relevant_geo; notes.push(`+${w.company_fit.relevant_geo} relevant geography`); }
+  else notes.push(`+0 geography not in target list`);
+
+  let sig = 0;
+  const has = n => signals.find(s => s.signal_name === n)?.detected;
+  if (has("IT hiring") || has("Cybersecurity / IAM hiring")) { sig += w.signals.it_security_hiring; notes.push(`+${w.signals.it_security_hiring} IT/security hiring signal detected`); }
+  else notes.push(`+0 no IT/security hiring signal`);
+
+  if (has("Remote or distributed workforce")) { sig += w.signals.remote_hybrid; notes.push(`+${w.signals.remote_hybrid} remote/hybrid workforce`); }
+  else notes.push(`+0 not remote/hybrid`);
+
+  if (has("Rapid headcount growth")) { sig += w.signals.growing_headcount; notes.push(`+${w.signals.growing_headcount} growing headcount`); }
+  else notes.push(`+0 headcount not growing`);
+
+  if (has("Geographic expansion")) { sig += w.signals.geo_expansion; notes.push(`+${w.signals.geo_expansion} geographic expansion`); }
+  else notes.push(`+0 no geographic expansion`);
+
+  let contact = 0;
+  const hasContact = c.contact.name !== "unknown";
+  const relevantTitle = /IT|Security|CIO|Identity|Access/i.test(c.contact.title || "");
+  if (hasContact && relevantTitle) { contact += w.contact.relevant_decision_maker; notes.push(`+${w.contact.relevant_decision_maker} relevant IT/security decision maker identified`); }
+  else notes.push(`+0 no confirmed relevant decision maker`);
+  if (c.contact.email !== "unknown") { contact += w.contact.contact_available; notes.push(`+${w.contact.contact_available} contact info available`); }
+  else notes.push(`+0 no contact info on file`);
+  if (hasContact && relevantTitle && c.contact.confidence === "high") { contact += w.contact.responsibilities_match; notes.push(`+${w.contact.responsibilities_match} responsibilities match likely pain area`); }
+  else notes.push(`+0 responsibilities match unconfirmed`);
+
+  const total = fit + sig + contact;
+  const tier = total >= ICP_CONFIG.tierA_threshold ? "A" : total >= ICP_CONFIG.tierB_threshold ? "B" : "C";
+
+  return { total_score: total, company_fit_score: fit, signal_score: sig, contact_score: contact, tier, score_explanation: notes };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 6 — PERSONA IDENTIFICATION
+// ---------------------------------------------------------------------------
+function identifyPersona(c, signals) {
+  let persona = "Director of IT";
+  let reason = "Default IT decision-maker persona for a company this size.";
+  if (signals.find(s => s.signal_name === "Cybersecurity / IAM hiring")?.detected) {
+    persona = c.employee_count > 500 ? "CIO / VP IT (security-adjacent)" : "IT Operations Director";
+    reason = "Active security/IAM hiring signal indicates identity and access management is already a budgeted priority.";
+  } else if (c.employee_count > 600) {
+    persona = "VP IT";
+    reason = "Company size suggests IT decisions route through a VP-level owner rather than a single admin.";
+  } else if (signals.find(s => s.signal_name === "Remote or distributed workforce")?.detected) {
+    persona = "Head of IT";
+    reason = "Distributed workforce puts device/identity ownership on a centralized IT lead.";
+  }
+  return {
+    persona,
+    reason_persona_is_relevant: reason,
+    contact_name: c.contact.name,
+    contact_title: c.contact.title,
+    contact_email: c.contact.email,
+    contact_confidence: c.contact.confidence
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 5 — AI REASONING (structured JSON)
+// DEMO NOTE: this function is a deterministic stand-in that returns the exact
+// schema a Claude API call would return. It never sets icp_score or tier —
+// those are passed in from the deterministic scorer. From the Architecture
+// tab, a viewer can optionally replace this output for one account with a
+// real call to the Claude API (see callClaudeLive below); the JSON shape is
+// identical either way, so nothing downstream needs to change.
+// ---------------------------------------------------------------------------
+function generateAIReasoning(c, signals, score) {
+  const detected = signals.filter(s => s.detected);
+  const primary = detected.sort((a, b) => (b.confidence === "high") - (a.confidence === "high"))[0];
+  const secondary = detected.filter(s => s !== primary).map(s => s.signal_name);
+  const missing = [];
+  if (c.contact.name === "unknown") missing.push("confirmed IT/security decision-maker contact");
+  if (c.estimated_growth === "unknown") missing.push("headcount growth trend");
+  if (c.technology_context === "unknown") missing.push("current identity/device management stack");
+
+  let painHypothesis, reasonNow;
+  if (primary?.signal_name.includes("hiring")) {
+    painHypothesis = `INFERENCE: the open IT/security role suggests ${c.company_name} is currently under-resourced to manage identity and device access at its current headcount — this is a plausible read of the hiring signal, not a confirmed pain point.`;
+    reasonNow = "A live hiring signal means budget and mandate likely already exist — outreach timed to a hiring window has a materially better chance of reaching someone with an active mandate.";
+  } else if (primary?.signal_name.includes("remote") || primary?.signal_name.includes("Remote")) {
+    painHypothesis = `INFERENCE: a distributed workforce without a confirmed unified identity layer (${c.technology_context}) raises the likelihood of fragmented device and access management — inferred from the workforce structure, not verified directly.`;
+    reasonNow = "Distributed-workforce companies without a named identity vendor are in-market more often than steady-state on-prem shops.";
+  } else if (primary?.signal_name.includes("expansion") || primary?.signal_name.includes("countries")) {
+    painHypothesis = `INFERENCE: expanding into ${c.countries_of_operation.length} countries typically forces a re-evaluation of identity and device policy to stay consistent across regions — this is a category-level pattern, not a confirmed statement from ${c.company_name}.`;
+    reasonNow = "Expansion phases are a known trigger point where IT re-evaluates its identity stack before scale makes migration harder.";
+  } else {
+    painHypothesis = `FACT: no strong buying signal was detected for ${c.company_name} in this dataset; any pain hypothesis here would be speculative.`;
+    reasonNow = "Insufficient signal strength to justify a timing-based outreach angle right now.";
+  }
+
+  return {
+    icp_score: score.total_score,
+    tier: score.tier,
+    primary_signal: primary ? primary.signal_name : "none detected",
+    secondary_signals: secondary,
+    pain_hypothesis: painHypothesis,
+    recommended_persona: identifyPersona(c, signals).persona,
+    reason_to_contact_now: reasonNow,
+    outreach_angle: primary ? `Lead with the ${primary.signal_name.toLowerCase()} signal, tie it to identity/device sprawl risk, offer a scoped conversation — not a demo pitch.` : "Insufficient signal to justify outreach; hold for nurture.",
+    confidence: detected.length >= 3 ? "high" : detected.length >= 1 ? "medium" : "low",
+    missing_information: missing,
+    source: "simulated"
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 7 — PERSONALIZED OUTREACH (<= ~80 words)
+// ---------------------------------------------------------------------------
+function generateOutreach(c, signals, reasoning, persona) {
+  const primary = reasoning.primary_signal;
+  const evidence = signals.find(s => s.signal_name === primary)?.evidence || "";
+  if (reasoning.confidence === "low") {
+    return { subject_line: "(hold — insufficient signal)", opening_line: "—", message: "Not enough evidence to justify a personalized outreach angle for this account yet — recommend nurture over outbound.", call_to_action: "—", evidence_used: "none" };
+  }
+  const subject = `${c.company_name}: identity/device question`;
+  const opening = `Noticed ${c.company_name} ${primary.toLowerCase().includes("hiring") ? "has an open IT/security req" : primary.toLowerCase().includes("remote") ? "runs a distributed team" : "is expanding across " + c.countries_of_operation.join("/")}.`;
+  const message = `${opening} Teams in that spot often end up managing devices and access across too many disconnected tools once headcount or geography outpaces the original setup. Curious whether that's on ${persona.persona.toLowerCase()}'s radar at ${c.company_name} right now, or if it's already handled.`;
+  const cta = "Worth a 15-minute conversation to compare notes?";
+  return { subject_line: subject, opening_line: opening, message, call_to_action: cta, evidence_used: evidence };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 7b — SEQUENCE (Tier A only) + FEEDBACK LOOP RULES
+// Mirrors the "sourcing → contact → research → priority → personalization →
+// sequencing → engagement orchestration" flow the role description asks for.
+// ---------------------------------------------------------------------------
+function buildSequence(c, signals, reasoning, persona) {
+  const primary = reasoning.primary_signal;
+  const growthOrItAngle = (primary.toLowerCase().includes("hiring") || primary.toLowerCase().includes("growth"))
+    ? `Growth/leadership signal: ${primary.toLowerCase()}` : `Primary signal: ${primary.toLowerCase()}`;
+  return {
+    steps: [
+      { day: 1, channel: "Email", description: `${growthOrItAngle} — opening email personalized from ${persona.persona}'s likely priority.` },
+      { day: 3, channel: "LinkedIn", description: "Short connection note referencing the same signal, no pitch." },
+      { day: 6, channel: "Email", description: "Second email, different angle — identity/device sprawl risk framed around headcount or geography growth." },
+      { day: 10, channel: "Final touch", description: "Security/device-management insight (breach cost, audit friction, or compliance angle) as a break-up-style final message." }
+    ],
+    feedback_rules: [
+      { trigger: "Positive reply", action: "Stop all automation immediately — BDR takes the conversation." },
+      { trigger: "Meeting booked", action: "Suppress all remaining automated outreach for this account." },
+      { trigger: "No response after full sequence", action: "Pause outreach until a new signal is detected." },
+      { trigger: "Not interested", action: "Suppress account / move to long-cycle nurture." }
+    ]
+  };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 8 — ROUTING ENGINE (deterministic, logged)
+// Routing depends on score AND evidence sufficiency AND contact readiness —
+// a high score with no named contact is a data-enrichment problem, not a
+// BDR-ready account.
+// ---------------------------------------------------------------------------
+function routeAccount(c, signals, score) {
+  const detectedCount = signals.filter(s => s.detected).length;
+  const hasSufficientEvidence = detectedCount >= ICP_CONFIG.min_signals_for_evidence;
+  const hasContact = c.contact.name !== "unknown" && c.contact.email !== "unknown";
+
+  if (score.tier === "A") {
+    if (hasSufficientEvidence && hasContact) {
+      return { action: "Route to BDR", crm_status: "Synced to CRM · HIGH PRIORITY", queue: "BDR — immediate", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold}, ${detectedCount} signals detected, contact identified.` };
+    }
+    if (!hasContact) {
+      return { action: "Contact enrichment", crm_status: "Synced to CRM · needs contact", queue: "Enrichment queue", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold} but no confirmed decision-maker contact on file — route to enrichment before BDR.` };
+    }
+    return { action: "Nurture / research", crm_status: "Synced to CRM · nurture", queue: "Marketing nurture", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold} but only ${detectedCount} signal(s) detected — below the ${ICP_CONFIG.min_signals_for_evidence}-signal evidence bar for a BDR handoff.` };
+  }
+  if (score.tier === "B") {
+    return { action: "Nurture / research", crm_status: "Synced to CRM · nurture", queue: "Marketing nurture", reason: `Score ${score.total_score} in the ${ICP_CONFIG.tierB_threshold}–${ICP_CONFIG.tierA_threshold - 1} band.` };
+  }
+  return { action: "Suppress", crm_status: "Not synced", queue: "None", reason: `Score ${score.total_score} below ${ICP_CONFIG.tierB_threshold}.` };
+}
+
+function routeTagClass(action) {
+  if (action === "Route to BDR") return "route-bdr";
+  if (action === "Contact enrichment") return "route-enrich";
+  if (action === "Nurture / research") return "route-nurture";
+  return "route-suppress";
+}
+
+// ---------------------------------------------------------------------------
+// "Why JumpCloud?" — connects enrichment attributes to the actual product
+// (unified identity + device + access), not a generic value prop.
+// ---------------------------------------------------------------------------
+function buildWhyJumpCloud(c, signals) {
+  const reasons = [];
+  if (/mac|windows|linux/i.test(c.technology_context) || /mixed/i.test(c.technology_context)) {
+    reasons.push({ attr: "Mixed-OS fleet", link: "Unified device management across Mac/Windows/Linux instead of per-OS tooling." });
+  }
+  if (c.countries_of_operation.length > 1) {
+    reasons.push({ attr: `Operates in ${c.countries_of_operation.length} countries`, link: "Single identity provider avoids per-region IAM sprawl as they scale internationally." });
+  }
+  if (signals.find(s => s.signal_name === "Remote or distributed workforce")?.detected) {
+    reasons.push({ attr: "Remote/hybrid workforce", link: "Cloud directory + device trust replaces on-prem AD/VPN assumptions that don't hold for distributed teams." });
+  }
+  if (signals.find(s => s.signal_name === "Cybersecurity / IAM hiring")?.detected) {
+    reasons.push({ attr: "Actively hiring for security/IAM", link: "A newly budgeted security hire is a natural buyer for a unified identity + access platform instead of stitching point solutions." });
+  }
+  if (signals.find(s => s.signal_name === "Rapid headcount growth")?.detected) {
+    reasons.push({ attr: "Fast headcount growth", link: "Growing headcount without unified onboarding/offboarding across identity + devices is where access sprawl and orphaned accounts start." });
+  }
+  if (reasons.length === 0) {
+    reasons.push({ attr: "No strong fit signal detected", link: "Not enough evidence yet to draw a credible connection to JumpCloud's product — hold for more enrichment rather than force an angle." });
+  }
+  return reasons;
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 12 — PIPELINE: build the full auditable record per account
+// ---------------------------------------------------------------------------
+function buildAccountRecord(c) {
+  const signals = detectSignals(c);
+  const score = scoreAccount(c, signals);
+  const persona = identifyPersona(c, signals);
+  const reasoning = generateAIReasoning(c, signals, score);
+  const outreach = generateOutreach(c, signals, reasoning, persona);
+  const routing = routeAccount(c, signals, score);
+  const sequence = buildSequence(c, signals, reasoning, persona);
+  const whyJumpCloud = buildWhyJumpCloud(c, signals);
+  return {
+    raw_input: { company_name: c.company_name, website: c.website },
+    enriched: c,
+    signals,
+    score,
+    persona,
+    ai_reasoning: reasoning,
+    outreach,
+    routing,
+    sequence,
+    whyJumpCloud,
+    timestamp: new Date().toISOString()
+  };
+}
+
+let ACCOUNTS = COMPANIES.map(buildAccountRecord);
+let ROUTING_LOG = buildRoutingLog();
+function buildRoutingLog() {
+  return ACCOUNTS.map(a => ({
+    company_name: a.enriched.company_name,
+    score: a.score.total_score,
+    tier: a.score.tier,
+    action: a.routing.action,
+    reason: a.routing.reason,
+    crm_status: a.routing.crm_status,
+    timestamp: a.timestamp
+  }));
+}
+
+function recomputePipeline() {
+  ACCOUNTS = COMPANIES.map(buildAccountRecord);
+  ROUTING_LOG = buildRoutingLog();
+}
+
+// ---------------------------------------------------------------------------
+// OPTIONAL — live Claude call for AI Research & Reasoning on a single account.
+// Client-side only demo wiring: the key never leaves the browser except in
+// the direct request to api.anthropic.com. Scoring/routing are untouched —
+// only ai_reasoning (and the outreach copy derived from it) is replaced.
+// ---------------------------------------------------------------------------
+let LIVE_CLAUDE_KEY = "";
+const LIVE_REASONING_OVERRIDES = {}; // accountId -> reasoning object from Claude
+
+async function callClaudeLive(c, signals, score) {
+  const system = `You are a B2B GTM research assistant. You will be given a company's enrichment data and detected buying signals for a company evaluating JumpCloud (unified identity, device, and access management). Return ONLY valid JSON matching this schema, no prose outside the JSON:
+{
+  "primary_signal": string,
+  "secondary_signals": string[],
+  "pain_hypothesis": string (must start with "FACT:" or "INFERENCE:" and be honest about which one it is),
+  "reason_to_contact_now": string,
+  "outreach_angle": string,
+  "confidence": "high" | "medium" | "low",
+  "missing_information": string[]
+}
+Never invent facts not present in the input. You do not set the ICP score or tier — those are provided to you as already-decided context, not something to re-evaluate.`;
+
+  const user = JSON.stringify({
+    company: { name: c.company_name, industry: c.industry, employee_count: c.employee_count,
+      countries_of_operation: c.countries_of_operation, estimated_growth: c.estimated_growth,
+      technology_context: c.technology_context },
+    detected_signals: signals.filter(s => s.detected).map(s => ({ name: s.signal_name, evidence: s.evidence, confidence: s.confidence })),
+    icp_score: score.total_score, tier: score.tier
+  });
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": LIVE_CLAUDE_KEY,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true"
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-5",
+      max_tokens: 600,
+      system,
+      messages: [{ role: "user", content: user }]
+    })
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Claude API error ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const text = (data.content || []).map(b => b.text || "").join("");
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Claude response did not contain parseable JSON.");
+  const parsed = JSON.parse(jsonMatch[0]);
+  return { ...parsed, icp_score: score.total_score, tier: score.tier, source: "live_claude" };
+}
+
+/* View layer — plain DOM rendering over the engine data + logic. */
+
+const PAGES = ["dashboard", "accounts", "signals", "routing", "config", "architecture"];
+let currentPage = "dashboard";
+let currentAccountId = null;
+let accountFilter = "ALL";
+
+function el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
+function fmtCountries(arr) { return arr.join(", "); }
+function esc(s) { const d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
+
+function renderAiModeBadge() {
+  const wrap = document.getElementById("ai-mode-badge");
+  wrap.innerHTML = "";
+  if (Object.keys(LIVE_REASONING_OVERRIDES).length > 0) {
+    wrap.appendChild(el(`<div class="rail-badge live">AI mode: LIVE CLAUDE</div>`));
+  }
+}
+
+function render() {
+  document.querySelectorAll(".rail nav button").forEach(b => b.classList.toggle("active", b.dataset.page === currentPage && !currentAccountId));
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+  renderAiModeBadge();
+  if (currentAccountId) { main.appendChild(renderAccountDetail(currentAccountId)); return; }
+  if (currentPage === "dashboard") main.appendChild(renderDashboard());
+  if (currentPage === "accounts") main.appendChild(renderAccounts());
+  if (currentPage === "signals") main.appendChild(renderSignals());
+  if (currentPage === "routing") main.appendChild(renderRouting());
+  if (currentPage === "config") main.appendChild(renderConfig());
+  if (currentPage === "architecture") main.appendChild(renderArchitecture());
+}
+
+function goTo(page) { currentAccountId = null; currentPage = page; render(); window.scrollTo(0, 0); }
+function openAccount(id) { currentAccountId = id; render(); window.scrollTo(0, 0); }
+
+/* ---------------------------------------------------------------- DASHBOARD */
+function renderDashboard() {
+  const tierA = ACCOUNTS.filter(a => a.score.tier === "A");
+  const tierB = ACCOUNTS.filter(a => a.score.tier === "B");
+  const tierC = ACCOUNTS.filter(a => a.score.tier === "C");
+  const avg = Math.round(ACCOUNTS.reduce((s, a) => s + a.score.total_score, 0) / ACCOUNTS.length);
+  const withSignal = ACCOUNTS.filter(a => a.signals.some(s => s.detected)).length;
+  const signalCoverage = Math.round((withSignal / ACCOUNTS.length) * 100);
+  const routedBDR = ACCOUNTS.filter(a => a.routing.action === "Route to BDR").length;
+  const bdrRoutingRate = Math.round((routedBDR / ACCOUNTS.length) * 100);
+  const trueQualRate = Math.round(((tierA.length + tierB.length) / ACCOUNTS.length) * 100);
+
+  const signalCounts = {};
+  ACCOUNTS.forEach(a => a.signals.forEach(s => { if (s.detected) signalCounts[s.signal_name] = (signalCounts[s.signal_name] || 0) + 1; }));
+  const topSignals = Object.entries(signalCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const wrap = el(`<div>
+    <div class="page-head">
+      <h1>GTM Operations Dashboard</h1>
+      <p>${ACCOUNTS.length} synthetic target accounts run through enrichment → signal detection → ICP scoring → AI reasoning → routing. Demo Mode — no live enrichment or CRM calls.</p>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="v">${ACCOUNTS.length}</div><div class="l">Total accounts</div></div>
+      <div class="kpi"><div class="v tier-a">${tierA.length}</div><div class="l">Tier A</div></div>
+      <div class="kpi"><div class="v tier-b">${tierB.length}</div><div class="l">Tier B</div></div>
+      <div class="kpi"><div class="v tier-c">${tierC.length}</div><div class="l">Tier C</div></div>
+      <div class="kpi"><div class="v">${avg}</div><div class="l">Average ICP score</div></div>
+      <div class="kpi"><div class="v">${signalCoverage}%</div><div class="l">Signal coverage — accounts with ≥1 active signal</div></div>
+      <div class="kpi"><div class="v">${routedBDR}</div><div class="l">Routed to BDR (simulated)</div></div>
+      <div class="kpi"><div class="v">${bdrRoutingRate}%</div><div class="l">BDR routing rate — Tier A routed / total evaluated</div></div>
+    </div>
+    <div class="simulated-note">"Qualification rate" is ambiguous, so it's reported two ways here: <strong>signal coverage</strong> (has ≥1 detected signal — not the same as being qualified) and <strong>BDR routing rate</strong> (actually cleared score + evidence + contact-readiness gates, ${trueQualRate}% of accounts also land in Tier A or B if you want a broader "qualified" definition).</div>
+    <div class="panel">
+      <div class="panel-head"><h2>Top buying signals across the book</h2></div>
+      <div class="body-pad">
+        ${topSignals.map(([name, count]) => `
+          <div class="score-bar-row" style="margin-bottom:10px">
+            <div class="lbl"><span>${name}</span><span class="n">${count}/${ACCOUNTS.length}</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${(count / ACCOUNTS.length) * 100}%"></div></div>
+          </div>`).join("")}
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Accounts</h2><span class="hint">click a row for full reasoning</span></div>
+      <table>
+        <thead><tr><th>Company</th><th>Score</th><th>Tier</th><th>Primary signal</th><th>Persona</th><th>Recommended action</th></tr></thead>
+        <tbody id="dash-tbody"></tbody>
+      </table>
+    </div>
+  </div>`);
+
+  const tbody = wrap.querySelector("#dash-tbody");
+  ACCOUNTS.slice().sort((a, b) => b.score.total_score - a.score.total_score).forEach(a => tbody.appendChild(accountRow(a)));
+  return wrap;
+}
+
+function accountRow(a) {
+  const tr = el(`<tr>
+    <td><strong>${esc(a.enriched.company_name)}</strong><br><span class="tag">${esc(a.enriched.industry)}</span></td>
+    <td class="score">${a.score.total_score}</td>
+    <td><span class="tier-pill ${a.score.tier}">${a.score.tier}</span></td>
+    <td>${esc(a.ai_reasoning.primary_signal)}</td>
+    <td>${esc(a.persona.persona)}</td>
+    <td><span class="tag ${routeTagClass(a.routing.action)}">${esc(a.routing.action)}</span></td>
+  </tr>`);
+  tr.addEventListener("click", () => openAccount(findId(a)));
+  return tr;
+}
+function findId(a) { return COMPANIES.find(c => c.company_name === a.enriched.company_name).id; }
+
+/* ---------------------------------------------------------------- ACCOUNTS */
+function renderAccounts() {
+  const wrap = el(`<div>
+    <div class="page-head"><h1>Accounts</h1><p>Every account carries its full raw input, enrichment, signals, score, and routing decision — auditable end to end.</p></div>
+    <div class="panel">
+      <div class="filter-row" id="tier-filter">
+        ${["ALL", "A", "B", "C"].map(t => `<button data-t="${t}" class="${t === accountFilter ? "active" : ""}">${t === "ALL" ? "All tiers" : "Tier " + t}</button>`).join("")}
+      </div>
+      <table>
+        <thead><tr><th>Company</th><th>Employees</th><th>HQ</th><th>Score</th><th>Tier</th><th>Signals</th><th>Routing</th></tr></thead>
+        <tbody id="acc-tbody"></tbody>
+      </table>
+    </div>
+  </div>`);
+
+  wrap.querySelectorAll("#tier-filter button").forEach(b => b.addEventListener("click", () => { accountFilter = b.dataset.t; render(); }));
+
+  const tbody = wrap.querySelector("#acc-tbody");
+  const list = ACCOUNTS.filter(a => accountFilter === "ALL" || a.score.tier === accountFilter)
+    .sort((a, b) => b.score.total_score - a.score.total_score);
+  list.forEach(a => {
+    const c = a.enriched;
+    const sigCount = a.signals.filter(s => s.detected).length;
+    const tr = el(`<tr>
+      <td><strong>${esc(c.company_name)}</strong></td>
+      <td>${c.employee_count}</td>
+      <td>${esc(c.headquarters)}</td>
+      <td class="score">${a.score.total_score}</td>
+      <td><span class="tier-pill ${a.score.tier}">${a.score.tier}</span></td>
+      <td>${sigCount} detected</td>
+      <td><span class="tag ${routeTagClass(a.routing.action)}">${esc(a.routing.action)}</span></td>
+    </tr>`);
+    tr.addEventListener("click", () => openAccount(findId(a)));
+    tbody.appendChild(tr);
+  });
+  return wrap;
+}
+
+/* ------------------------------------------------------------ ACCOUNT DETAIL */
+function renderAccountDetail(id) {
+  const c = COMPANIES.find(x => x.id === id);
+  const a = ACCOUNTS.find(x => x.enriched.company_name === c.company_name);
+  const r = LIVE_REASONING_OVERRIDES[id] || a.ai_reasoning;
+  const isLive = !!LIVE_REASONING_OVERRIDES[id];
+
+  const wrap = el(`<div>
+    <button class="back-btn" id="back">&larr; Back</button>
+    <div class="page-head">
+      <h1>${esc(c.company_name)} ${isLive ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">LIVE CLAUDE</span>' : ''}</h1>
+      <p>${esc(c.company_description)}</p>
+    </div>
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="v">${a.score.total_score}</div><div class="l">ICP score (deterministic)</div></div>
+      <div class="kpi"><div class="v tier-${a.score.tier.toLowerCase()}">${a.score.tier}</div><div class="l">Tier</div></div>
+      <div class="kpi"><div class="v">${a.signals.filter(s => s.detected).length}</div><div class="l">Signals detected</div></div>
+      <div class="kpi"><div class="v">${r.confidence}</div><div class="l">AI confidence</div></div>
+    </div>
+
+    <div class="detail-grid">
+      <div>
+        <div class="panel">
+          <div class="panel-head"><h2>Company &amp; enrichment</h2></div>
+          <div class="body-pad">
+            ${fieldRow("Website", c.website)}
+            ${fieldRow("Industry", c.industry)}
+            ${fieldRow("Employees", c.employee_count)}
+            ${fieldRow("Headquarters", c.headquarters)}
+            ${fieldRow("Countries of operation", fmtCountries(c.countries_of_operation))}
+            ${fieldRow("Estimated growth", c.estimated_growth)}
+            ${fieldRow("Technology context", c.technology_context)}
+            ${fieldRow("Last enriched", `${c.last_enriched} (${daysSince(c.last_enriched)}d ago)`)}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Signals &amp; evidence</h2><span class="hint">full evidence engine output</span></div>
+          <div class="body-pad">
+            ${a.signals.map(s => `
+              <div class="evidence-card">
+                <div class="row1">
+                  <span class="name ${s.detected ? "" : "off"}">${s.detected ? "✓" : "—"} ${esc(s.signal_name)}</span>
+                  <span class="pill-conf ${s.detected ? s.confidence : "low"}">${s.detected ? s.confidence : "not detected"}</span>
+                </div>
+                <div class="evidence-text">${esc(s.evidence)}</div>
+                <div class="meta">
+                  <span>source: ${esc(s.source)}</span>
+                  <span>observed: ${esc(s.observed_date)}</span>
+                  <span>freshness: ${s.freshness_days}d</span>
+                </div>
+              </div>`).join("")}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>AI interpretation${isLive ? ' <span style="color:var(--good)">· live Claude output</span>' : ''}</h2><span class="hint">structured reasoning — never sets score or routing</span></div>
+          <div class="body-pad">
+            <div class="reasoning-block"><div class="k">Primary signal</div>${esc(r.primary_signal)}</div>
+            <div class="reasoning-block"><div class="k">Secondary signals</div>${r.secondary_signals.length ? r.secondary_signals.map(esc).join(", ") : "none"}</div>
+            <div class="reasoning-block"><div class="k">Pain hypothesis</div>${renderInference(r.pain_hypothesis)}</div>
+            <div class="reasoning-block"><div class="k">Reason to contact now</div>${esc(r.reason_to_contact_now)}</div>
+            <div class="reasoning-block"><div class="k">Missing information</div>${r.missing_information.length ? r.missing_information.map(esc).join(", ") : "none flagged"}</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Generated outreach</h2></div>
+          <div class="body-pad">
+            <div class="outreach-card">
+              <div class="subj">${esc(a.outreach.subject_line)}</div>
+              <div>${esc(a.outreach.message)}</div>
+              <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(a.outreach.call_to_action)}</div>
+            </div>
+          </div>
+        </div>
+
+        ${a.score.tier === "A" ? `
+        <div class="panel">
+          <div class="panel-head"><h2>Sequence (Tier A)</h2><span class="hint">sourcing → contact → research → personalization → sequencing → orchestration</span></div>
+          <div class="body-pad">
+            ${a.sequence.steps.map(s => `
+              <div class="seq-step">
+                <div class="seq-day">Day ${s.day}</div>
+                <div class="seq-body"><div class="chan">${esc(s.channel)}</div><div class="desc">${esc(s.description)}</div></div>
+              </div>`).join("")}
+            <div style="margin-top:12px;font-size:12px;color:var(--muted)">Feedback loop</div>
+            <div class="feedback-grid">
+              ${a.sequence.feedback_rules.map(f => `
+                <div class="feedback-item"><div class="trig">${esc(f.trigger)}</div>${esc(f.action)}</div>`).join("")}
+            </div>
+          </div>
+        </div>` : ``}
+
+        <div class="panel">
+          <div class="panel-head"><h2>Why JumpCloud?</h2></div>
+          <div class="body-pad">
+            <div class="jc-box">
+              <ul>
+                ${a.whyJumpCloud.map(w => `<li><b>${esc(w.attr)}</b> — ${esc(w.link)}</li>`).join("")}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Run live Claude reasoning</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
+          <div class="body-pad">
+            <div class="claude-live-box">
+              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Anthropic API key to call the real Claude API for this account's reasoning step. The key is used only for this browser request to api.anthropic.com — it is never stored, logged, or sent anywhere else. Scoring and routing above stay deterministic either way.</p>
+              <input type="password" id="claude-key-input" placeholder="sk-ant-..." value="${LIVE_CLAUDE_KEY ? esc(LIVE_CLAUDE_KEY) : ""}" />
+              <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
+                <button class="btn primary small" id="run-live-btn">Run live Claude call</button>
+                ${isLive ? '<button class="btn small" id="revert-live-btn">Revert to simulated</button>' : ''}
+              </div>
+              <div class="claude-status" id="claude-status"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <div class="panel-head"><h2>Score breakdown</h2></div>
+          <div class="body-pad">
+            <div class="score-bars">
+              ${scoreBar("Company fit", a.score.company_fit_score, 40)}
+              ${scoreBar("Buying signals", a.score.signal_score, 40)}
+              ${scoreBar("Contact quality", a.score.contact_score, 20)}
+            </div>
+            <ul class="explain-list" style="margin-top:14px">
+              ${a.score.score_explanation.map(n => `<li class="${n.startsWith("+0") ? "" : "pos"}">${esc(n)}</li>`).join("")}
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Persona</h2></div>
+          <div class="body-pad">
+            ${fieldRow("Recommended", a.persona.persona)}
+            ${fieldRow("Why", a.persona.reason_persona_is_relevant)}
+            ${fieldRow("Contact", a.persona.contact_name)}
+            ${fieldRow("Title", a.persona.contact_title)}
+            ${fieldRow("Email", a.persona.contact_email)}
+            ${fieldRow("Confidence", a.persona.contact_confidence)}
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Routing &amp; CRM sync (mock)</h2></div>
+          <div class="body-pad">
+            ${fieldRow("Action", a.routing.action)}
+            ${fieldRow("Why", a.routing.reason)}
+            ${fieldRow("Queue", a.routing.queue)}
+            ${fieldRow("CRM status", a.routing.crm_status)}
+            ${fieldRow("Lifecycle stage", a.score.tier === "A" ? "Sales Qualified Lead" : a.score.tier === "B" ? "Marketing Qualified Lead" : "Not qualified")}
+            ${fieldRow("Owner", a.routing.action === "Route to BDR" ? "BDR queue — round robin" : "Unassigned")}
+            ${fieldRow("Timestamp", new Date(a.timestamp).toLocaleString())}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`);
+
+  wrap.querySelector("#back").addEventListener("click", () => { currentAccountId = null; render(); });
+
+  const statusEl = wrap.querySelector("#claude-status");
+  wrap.querySelector("#run-live-btn").addEventListener("click", async () => {
+    const key = wrap.querySelector("#claude-key-input").value.trim();
+    if (!key) { statusEl.textContent = "Enter an Anthropic API key first."; statusEl.className = "claude-status err"; return; }
+    LIVE_CLAUDE_KEY = key;
+    statusEl.textContent = "Calling Claude API...";
+    statusEl.className = "claude-status";
+    try {
+      const liveReasoning = await callClaudeLive(c, a.signals, a.score);
+      LIVE_REASONING_OVERRIDES[id] = liveReasoning;
+      render();
+      openAccount(id);
+    } catch (err) {
+      statusEl.textContent = "Failed: " + err.message + " — falling back to the simulated reasoning above. This usually means the browser is blocked from calling api.anthropic.com directly (CORS) or the key is invalid; a production build would proxy this through a backend.";
+      statusEl.className = "claude-status err";
+    }
+  });
+  const revertBtn = wrap.querySelector("#revert-live-btn");
+  if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; openAccount(id); });
+
+  return wrap;
+}
+function renderInference(text) {
+  const m = /^(FACT|INFERENCE):\s*(.*)$/s.exec(text);
+  if (!m) return esc(text);
+  return `<span class="inference-tag ${m[1]}">${m[1]}</span>${esc(m[2])}`;
+}
+function fieldRow(k, v) { return `<div class="field-row"><span class="k">${esc(k)}</span><span class="val">${esc(v)}</span></div>`; }
+function scoreBar(label, val, max) {
+  return `<div class="score-bar-row"><div class="lbl"><span>${esc(label)}</span><span class="n">${val}/${max}</span></div><div class="bar-track"><div class="bar-fill" style="width:${(val / max) * 100}%"></div></div></div>`;
+}
+
+/* ---------------------------------------------------------------- SIGNALS */
+function renderSignals() {
+  const signalNames = [...new Set(ACCOUNTS.flatMap(a => a.signals.map(s => s.signal_name)))];
+  const wrap = el(`<div>
+    <div class="page-head"><h1>Signal Engine</h1><p>Each signal is derived from a single enrichment field with a stated confidence, source, observed date and freshness — nothing here is inferred without a citation back to the record it came from.</p></div>
+    <div class="panel">
+      <div class="panel-head"><h2>Signal coverage matrix</h2></div>
+      <table>
+        <thead><tr><th>Company</th>${signalNames.map(n => `<th>${esc(n)}</th>`).join("")}</tr></thead>
+        <tbody id="sig-tbody"></tbody>
+      </table>
+    </div>
+  </div>`);
+  const tbody = wrap.querySelector("#sig-tbody");
+  ACCOUNTS.forEach(a => {
+    const tr = el(`<tr><td><strong>${esc(a.enriched.company_name)}</strong></td>${signalNames.map(n => {
+      const s = a.signals.find(x => x.signal_name === n);
+      return `<td>${s.detected ? `<span class="tag" title="${esc(s.evidence)} (observed ${esc(s.observed_date)}, ${s.freshness_days}d ago)">${s.confidence}</span>` : "—"}</td>`;
+    }).join("")}</tr>`);
+    tr.addEventListener("click", () => openAccount(findId(a)));
+    tbody.appendChild(tr);
+  });
+  return wrap;
+}
+
+/* ---------------------------------------------------------------- ROUTING */
+function renderRouting() {
+  const wrap = el(`<div>
+    <div class="page-head"><h1>Routing Log</h1><p>Deterministic rules, not the LLM, decide routing — every decision below is reproducible from the score, evidence count, and contact-readiness alone.</p></div>
+    <div class="panel">
+      <div class="body-pad" style="font-family:var(--font-mono);font-size:12.5px;color:var(--muted);line-height:1.9">
+        score ≥ ${ICP_CONFIG.tierA_threshold} + ≥${ICP_CONFIG.min_signals_for_evidence} signals + contact identified → <span style="color:var(--good)">Route to BDR</span><br>
+        score ≥ ${ICP_CONFIG.tierA_threshold} + no confirmed contact → <span style="color:var(--warn)">Contact enrichment</span><br>
+        score ${ICP_CONFIG.tierB_threshold}–${ICP_CONFIG.tierA_threshold - 1} (or Tier A with thin evidence) → <span style="color:var(--accent)">Nurture / research</span><br>
+        score &lt; ${ICP_CONFIG.tierB_threshold} → <span style="color:var(--bad)">Suppress</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Log</h2></div>
+      <table>
+        <thead><tr><th>Company</th><th>Score</th><th>Tier</th><th>Action</th><th>Why</th><th>Timestamp</th></tr></thead>
+        <tbody id="route-tbody"></tbody>
+      </table>
+    </div>
+  </div>`);
+  const tbody = wrap.querySelector("#route-tbody");
+  ROUTING_LOG.slice().sort((a, b) => b.score - a.score).forEach(r => {
+    tbody.appendChild(el(`<tr>
+      <td><strong>${esc(r.company_name)}</strong></td>
+      <td class="score">${r.score}</td>
+      <td><span class="tier-pill ${r.tier}">${r.tier}</span></td>
+      <td><span class="tag ${routeTagClass(r.action)}">${esc(r.action)}</span></td>
+      <td style="color:var(--muted);font-size:12px">${esc(r.reason)}</td>
+      <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+    </tr>`));
+  });
+  return wrap;
+}
+
+/* ------------------------------------------------------------------ CONFIG */
+function renderConfig() {
+  const cfg = ICP_CONFIG;
+  const wrap = el(`<div>
+    <div class="page-head"><h1>ICP Configuration</h1><p>These are illustrative scoring assumptions for this prototype, not JumpCloud's internal qualification criteria. All weights, thresholds, geos and industries below are editable and only affect this demo session.</p></div>
+    <div class="icp-note">Nothing on this page represents a real JumpCloud ICP document. It exists to show the scoring model is configurable rather than hardcoded opinion.</div>
+    <div class="panel">
+      <div class="panel-head"><h2>Thresholds &amp; bands</h2></div>
+      <div class="body-pad">
+        <div class="cfg-row"><span>Headcount band — min</span><input type="number" id="cfg-hc-min" value="${cfg.headcount_min}"></div>
+        <div class="cfg-row"><span>Headcount band — max</span><input type="number" id="cfg-hc-max" value="${cfg.headcount_max}"></div>
+        <div class="cfg-row"><span>Tier A threshold (score ≥)</span><input type="number" id="cfg-tierA" value="${cfg.tierA_threshold}"></div>
+        <div class="cfg-row"><span>Tier B threshold (score ≥)</span><input type="number" id="cfg-tierB" value="${cfg.tierB_threshold}"></div>
+        <div class="cfg-row"><span>Min. signals for "sufficient evidence"</span><input type="number" id="cfg-minsig" value="${cfg.min_signals_for_evidence}"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Signal weights</h2></div>
+      <div class="body-pad">
+        <div class="cfg-row"><span>IT/security hiring</span><input type="number" id="w-it-security" value="${cfg.weights.signals.it_security_hiring}"></div>
+        <div class="cfg-row"><span>Remote/hybrid workforce</span><input type="number" id="w-remote" value="${cfg.weights.signals.remote_hybrid}"></div>
+        <div class="cfg-row"><span>Growing headcount</span><input type="number" id="w-growth" value="${cfg.weights.signals.growing_headcount}"></div>
+        <div class="cfg-row"><span>Geographic expansion</span><input type="number" id="w-geo" value="${cfg.weights.signals.geo_expansion}"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Target geographies</h2></div>
+      <div class="body-pad">
+        <div class="cfg-checks" id="geo-chips">
+          ${["US","CA","UK","DE","CH","AU","SG","FR","MX","JP"].map(g => `<span class="cfg-chip ${cfg.target_geos.includes(g) ? "on" : ""}" data-geo="${g}">${g}</span>`).join("")}
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Target industries</h2></div>
+      <div class="body-pad">
+        <div class="cfg-checks" id="ind-chips">
+          ${[...new Set(COMPANIES.map(c => c.industry))].map(i => `<span class="cfg-chip ${cfg.target_industries.includes(i) ? "on" : ""}" data-ind="${i}">${i}</span>`).join("")}
+        </div>
+      </div>
+      <div class="cfg-actions">
+        <button class="btn primary" id="apply-cfg">Apply &amp; re-run pipeline</button>
+        <button class="btn" id="reset-cfg">Reset to defaults</button>
+      </div>
+    </div>
+  </div>`);
+
+  wrap.querySelectorAll("#geo-chips .cfg-chip").forEach(chip => chip.addEventListener("click", () => chip.classList.toggle("on")));
+  wrap.querySelectorAll("#ind-chips .cfg-chip").forEach(chip => chip.addEventListener("click", () => chip.classList.toggle("on")));
+
+  wrap.querySelector("#apply-cfg").addEventListener("click", () => {
+    ICP_CONFIG.headcount_min = parseInt(wrap.querySelector("#cfg-hc-min").value, 10) || 0;
+    ICP_CONFIG.headcount_max = parseInt(wrap.querySelector("#cfg-hc-max").value, 10) || 999999;
+    ICP_CONFIG.tierA_threshold = parseInt(wrap.querySelector("#cfg-tierA").value, 10) || 80;
+    ICP_CONFIG.tierB_threshold = parseInt(wrap.querySelector("#cfg-tierB").value, 10) || 60;
+    ICP_CONFIG.min_signals_for_evidence = parseInt(wrap.querySelector("#cfg-minsig").value, 10) || 2;
+    ICP_CONFIG.weights.signals.it_security_hiring = parseInt(wrap.querySelector("#w-it-security").value, 10) || 0;
+    ICP_CONFIG.weights.signals.remote_hybrid = parseInt(wrap.querySelector("#w-remote").value, 10) || 0;
+    ICP_CONFIG.weights.signals.growing_headcount = parseInt(wrap.querySelector("#w-growth").value, 10) || 0;
+    ICP_CONFIG.weights.signals.geo_expansion = parseInt(wrap.querySelector("#w-geo").value, 10) || 0;
+    ICP_CONFIG.target_geos = [...wrap.querySelectorAll("#geo-chips .cfg-chip.on")].map(c => c.dataset.geo);
+    ICP_CONFIG.target_industries = [...wrap.querySelectorAll("#ind-chips .cfg-chip.on")].map(c => c.dataset.ind);
+    recomputePipeline();
+    render();
+  });
+  wrap.querySelector("#reset-cfg").addEventListener("click", () => {
+    ICP_CONFIG = JSON.parse(JSON.stringify(DEFAULT_ICP_CONFIG));
+    recomputePipeline();
+    render();
+  });
+
+  return wrap;
+}
+
+/* ------------------------------------------------------------ ARCHITECTURE */
+const MCP_TOOLS = [
+  { name: "search_account", permission: "READ", input: "{ query: string }", returns: "Matching account summaries (name, tier, score, routing status)", cannot: "Cannot modify any record or trigger outreach.", approval: false },
+  { name: "get_account_score", permission: "READ", input: "{ account_id: string }", returns: "Full score breakdown, signals, and reasoning for one account", cannot: "Cannot recompute or override the score.", approval: false },
+  { name: "qualify_account", permission: "READ", input: "{ account_id: string }", returns: "Runs the deterministic pipeline (signals → score → persona → reasoning → routing) and returns the full record", cannot: "Cannot write the result back to the CRM by itself — that is a separate, explicit tool.", approval: false },
+  { name: "list_high_priority_accounts", permission: "READ", input: "{ tier?: 'A'|'B'|'C', limit?: number }", returns: "List of accounts matching the filter, sorted by score", cannot: "Cannot change tier assignment or filter criteria server-side.", approval: false },
+  { name: "route_account", permission: "WRITE", input: "{ account_id: string, action: 'Route to BDR'|'Contact enrichment'|'Nurture / research'|'Suppress' }", returns: "Confirmation of the CRM sync + updated routing log entry", cannot: "Cannot set a routing action inconsistent with the deterministic rule for that account's current score — the tool validates against the same logic as the UI before writing.", approval: true }
+];
+
+function renderArchitecture() {
+  const wrap = el(`<div>
+    <div class="page-head"><h1>System Architecture</h1><p>Demo Mode runs entirely client-side on a seeded dataset. The same data model is designed to accept live Clay enrichment, a real Claude reasoning call, and a Salesforce/HubSpot sync without changing anything downstream.</p></div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2></div>
+      <div class="arch-flow"><span class="node">SOURCE — target account (CSV / form / API)</span>
+  <span class="arrow">↓</span>
+<span class="node">ENRICH — company data (Clay)</span>
+  <span class="arrow">↓</span>
+<span class="node">DETECT SIGNALS — deterministic signal engine</span>
+  <span class="arrow">↓</span>
+<span class="node">SCORE — deterministic ICP score, configurable weights</span>
+  <span class="arrow">↓</span>
+<span class="gate">GATE — is this account worth AI compute + seller attention? (score ≥ Tier B threshold)</span>
+  <span class="arrow">↓ if yes</span>
+<span class="node">AI RESEARCH &amp; REASONING — Claude, structured JSON, never sets score/routing</span>
+  <span class="arrow">↓</span>
+<span class="node">PERSONA — identification, deterministic</span>
+  <span class="arrow">↓</span>
+<span class="node">PERSONALIZE — outreach copy grounded in cited evidence</span>
+  <span class="arrow">↓</span>
+<span class="node">SEQUENCE — multi-touch cadence, Tier A</span>
+  <span class="arrow">↓</span>
+<span class="node">ROUTE — score + evidence + contact-readiness rules, logged</span>
+  <span class="arrow">↓</span>
+<span class="node">LEARN — reply/meeting/no-response feedback loop adjusts automation state</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Where Zapier / webhooks participate (production design)</h2></div>
+      <div class="body-pad" style="font-size:13.5px;color:var(--muted)">
+        Clay's table finishes an enrichment run and posts to <span class="tag">POST /api/webhook/clay</span>.
+        That triggers qualification (<span class="tag">POST /api/qualify</span>) automatically — no manual step.
+        Zapier sits alongside this as an optional layer for teams that want a no-code trigger between Clay,
+        the qualification API, and the CRM instead of native webhooks. None of this is live in the static demo —
+        see the stack breakdown below for what is actually running versus designed.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Current prototype vs. production integration design</h2></div>
+      <div class="stack-cols body-pad">
+        <div class="stack-col">
+          <h3>Current prototype</h3>
+          <div class="stack-note">Everything below is actually running in this build — nothing is a live third-party connection.</div>
+          <ul>
+            <li><span class="live-dot"></span>Seeded JSON dataset — simulates enrichment output</li>
+            <li><span class="live-dot"></span>JavaScript signal engine — live in this build</li>
+            <li><span class="live-dot"></span>Deterministic ICP scoring — live, configurable in ICP Config</li>
+            <li><span class="live-dot"></span>Structured AI-response simulator — live (optionally swappable for a real Claude call per account, see below)</li>
+            <li><span class="live-dot"></span>Routing engine — live, rule-based</li>
+            <li><span class="live-dot"></span>Static deployment (Netlify) — live</li>
+          </ul>
+        </div>
+        <div class="stack-col">
+          <h3>Production integration design</h3>
+          <div class="stack-note">Designed and mapped to the pipeline above — not built or connected in this repo.</div>
+          <ul>
+            <li><span class="design-dot"></span>Clay → enrichment</li>
+            <li><span class="design-dot"></span>Claude API → research / reasoning / personalization</li>
+            <li><span class="design-dot"></span>Salesforce → CRM system of record</li>
+            <li><span class="design-dot"></span>Marketo → nurture</li>
+            <li><span class="design-dot"></span>Gong Engage → sequencing</li>
+            <li><span class="design-dot"></span>Webhooks / orchestration layer → automation glue</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Live Claude call — proof of wiring</h2></div>
+      <div class="body-pad" style="font-size:13.5px;color:var(--muted)">
+        The AI Research &amp; Reasoning step is the only place a model is allowed to touch this pipeline — never scoring, never routing.
+        Open any account's detail page and use "Run live Claude reasoning" to see this wired to the real Anthropic API with your own key
+        (client-side call, key never persisted). When active, the rail shows an <span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">AI mode: LIVE CLAUDE</span> badge.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>API surface (designed, not live in this static demo)</h2></div>
+      <div class="body-pad" style="font-family:var(--font-mono);font-size:12.5px;color:var(--muted);line-height:2">
+        POST /api/accounts &nbsp;— create a target account<br>
+        POST /api/qualify &nbsp;— run enrichment → signals → score → AI reasoning<br>
+        POST /api/webhook/clay &nbsp;— receive Clay enrichment, auto-trigger qualification<br>
+        GET /api/accounts &nbsp;— list accounts with scores<br>
+        GET /api/accounts/:id &nbsp;— full auditable record<br>
+        POST /api/accounts/:id/route &nbsp;— re-run routing decision
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>MCP tool surface</h2><span class="hint">permissions, contracts, and human-approval gates</span></div>
+      <div class="body-pad">
+        <p style="margin:0 0 12px;color:var(--muted);font-size:13px">LLM / Agent → MCP Client → MCP Server → GTM tools → application data. Documented here as a designed contract — read tools would run against this demo's in-memory data if wired up; the one write tool is deliberately gated.</p>
+        ${MCP_TOOLS.map(t => `
+          <div class="mcp-tool">
+            <div class="mcp-tool-head">
+              <span class="tname">${esc(t.name)}</span>
+              <span class="perm-pill ${t.permission}">${t.permission} ONLY</span>
+              ${t.approval ? '<span class="approval-pill">requires human approval</span>' : ''}
+            </div>
+            <div class="mcp-tool-body">
+              <div><div class="k">Input</div><div class="v">${esc(t.input)}</div></div>
+              <div><div class="k">Returns</div><div class="v">${esc(t.returns)}</div></div>
+              <div class="full"><div class="k">Does NOT permit</div><div class="v">${esc(t.cannot)}</div></div>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>
+
+    <div class="simulated-note">All dashboard metrics on this page and the Dashboard tab are computed from the seeded demo dataset. No real BDR performance data is used or implied.</div>
+  </div>`);
+  return wrap;
+}
+
+/* ---------------------------------------------------------------- INIT */
+document.querySelectorAll(".rail nav button").forEach(b => b.addEventListener("click", () => goTo(b.dataset.page)));
+render();
+
+</script>
+</body>
+</html>
