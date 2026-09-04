@@ -1632,6 +1632,28 @@ function renderOutcomes() {
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h2>Feedback-driven outbound (illustrative)</h2><span class="hint">how the system would learn from real replies, once there are any</span></div>
+      <div class="body-pad" style="overflow-x:auto">
+        <p style="margin:0 0 8px;font-size:13.5px;color:var(--muted)">No outreach has been sent yet, so there is no real reply data — but this is the loop the system is built to close once there is. After a batch of outreach, an operator would look at reply rate by the signal that triggered contact:</p>
+        <table class="compare-table">
+          <thead><tr><th>Signal</th><th>Positive reply rate (illustrative)</th></tr></thead>
+          <tbody>
+            <tr><td>Security hiring</td><td>11%</td></tr>
+            <tr><td>Geographic expansion</td><td>7%</td></tr>
+            <tr><td>IT hiring</td><td>4%</td></tr>
+            <tr><td>Remote workforce</td><td>2%</td></tr>
+          </tbody>
+        </table>
+        <div class="mini-flow" style="margin-top:12px">
+          <div class="mf-node">Human reviews performance by signal</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Security hiring weight: 15 → 20</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Next scoring version deployed via ICP Config</div>
+        </div>
+        <p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">The model never adjusts its own scoring weights — a person reviews outcomes and decides. See ICP Config for the exact weights this run used, and Signal Engine for how each signal is captured with confidence and freshness so it can be traced back to a reply rate later.</p>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>Agent effectiveness (real, from this run)</h2></div>
       <div class="body-pad">
         ${fieldRow("Most common detected signal", topSignal ? `${topSignal[0]} (${topSignal[1]}/${ACCOUNTS.length} accounts)` : "none")}
@@ -1832,6 +1854,22 @@ function renderArchitecture() {
           POST /api/accounts — create a target account &nbsp;·&nbsp; GET /api/accounts — list with scores &nbsp;·&nbsp; GET /api/accounts/:id — full record<br>
           POST /api/accounts/:id/route — re-run the routing decision
         </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Trigger-based outbound: dynamic re-prioritization</h2><span class="hint">event → agent run, not a static database</span></div>
+      <div class="body-pad">
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">Scoring in this demo runs once, against a single Clay snapshot. In production the same engine re-runs whenever a signal changes — a tier is a live output, not a label an account keeps forever. Illustrative example, not a real event that fired:</p>
+        <div class="mini-flow">
+          <div class="mf-node">New signal detected — PostHog opens 3 Security roles</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Signal Agent updates the account record</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Qualification engine recomputes: 72 → 82</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Tier B → Tier A</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Contact enrichment + research agents activate</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Draft generated, held for human approval</div>
+        </div>
+        <p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">The question a signal-driven system answers isn't <em>"could this account buy?"</em> — it's <strong>"why this account, and why now?"</strong> The scoring engine and gate already in this demo (see Pipeline above) are what make that re-run cheap enough to trigger on every signal change instead of on a quarterly refresh.</p>
       </div>
     </div>
 

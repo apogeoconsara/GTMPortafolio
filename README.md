@@ -62,6 +62,37 @@ necesidad de más datos.
 | Sección de arquitectura que separa "Current prototype" (lo que corre/corrió de verdad, incluyendo el enriquecimiento real de Clay) de "Production integration design" (Salesforce, Marketo, Gong Engage, backend con credenciales del lado del servidor) | Honestidad técnica ante una revisión de código |
 | Panel de ICP Configuration editable en vivo (headcount, geos, industrias, pesos de señales, umbrales de tier) | Rol builder hands-on, no experimento aislado — el sistema es configurable, no hardcodeado |
 
+## Cobertura de estrategias de outbound
+
+"Outbound operations" no es solo mandar correos en frío: es diseñar el sistema completo que
+decide a quién contactar, cuándo, con qué prioridad, a qué persona, con qué mensaje, por qué
+canal, qué hace ventas después, y qué se aprende del resultado. Así mapea este demo contra
+las estrategias que un rol de GTM AI Operations típicamente tiene que dominar:
+
+| Estrategia | Cómo funciona | Dónde está en este demo |
+|---|---|---|
+| Account-based | Primero empresas objetivo, luego personas dentro de ellas | Accounts + persona por cuenta |
+| ICP-based | Prioriza empresas por qué tan bien encajan con el cliente ideal | Score determinístico + ICP Config |
+| Tiered | No todas las cuentas reciben el mismo esfuerzo | Tier A personalizado / B nurture / C suprimido |
+| Signal-based | Contactas cuando aparece una señal relevante | Signal Engine, evidencia citada por cuenta |
+| Trigger-based | Una señal específica dispara una acción automática | "Trigger-based outbound" en Architecture |
+| Persona-based | El mensaje y contacto dependen del rol | Persona + "Why this person?" en cada cuenta |
+| Multichannel | Combina email, LinkedIn, llamadas, etc. | Sequence (Tier A) por cuenta |
+| Recycling / nurture | Una cuenta no calificada no se pierde, se re-evalúa | Tier B → nurture hasta nueva señal |
+| Agentic | Agentes ejecutan partes distintas del proceso con herramientas | Agent Run trace + MCP tool surface |
+| Feedback-driven | Los resultados ajustan los pesos de scoring, con un humano en el medio | "Feedback-driven outbound" en Outcomes |
+| Intent-based | Prioriza por intención de compra (pricing, comparativas) | No implementado — señal a agregar si hay datos de intent |
+| Capacity-based | Ajusta volumen al ancho de banda real del BDR | No implementado en este demo |
+| Territory / routing | Decide qué vendedor recibe cada oportunidad | Routing tiene acción, no asignación por territorio |
+| Experimentation | Prueba qué señales/mensajes/canales funcionan mejor | Cubierto conceptualmente por el loop de feedback, sin A/B real |
+
+**Cómo describir la estrategia en entrevista:**
+
+> "The strategy behind the system is a signal-driven, account-based outbound motion. Instead
+> of maximizing outreach volume, it prioritizes accounts based on ICP fit and observable
+> buying signals, then allocates enrichment, AI compute and seller attention only when the
+> expected value justifies it."
+
 ## Principio de diseño
 
 **La IA no toca todo el flujo.** El scoring ICP y el ruteo son y seguirán siendo
