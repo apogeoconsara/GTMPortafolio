@@ -147,10 +147,10 @@ tbody tr:hover { background: var(--panel-2); }
 .tier-pill.C { background: var(--tier-c); color: #FFFFFF; }
 
 .tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; display: inline-block; }
-.tag.route-bdr { color: var(--good); border-color: rgba(22,163,74,.35); }
-.tag.route-enrich { color: var(--warn); border-color: rgba(180,83,9,.35); }
-.tag.route-nurture { color: var(--accent); border-color: rgba(14,143,118,.35); }
-.tag.route-suppress { color: var(--bad); border-color: rgba(220,38,38,.35); }
+.tag.route-bdr { color: #FFFFFF; background: var(--good); border-color: var(--good); }
+.tag.route-enrich { color: #FFFFFF; background: var(--warn); border-color: var(--warn); }
+.tag.route-nurture { color: #FFFFFF; background: var(--accent); border-color: var(--accent); }
+.tag.route-suppress { color: #FFFFFF; background: var(--bad); border-color: var(--bad); }
 
 /* --- Detail view --- */
 .detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
@@ -193,10 +193,20 @@ tbody tr:hover { background: var(--panel-2); }
 .explain-list li.pos { color: var(--good); }
 
 /* --- Architecture --- */
-.arch-flow { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.9; white-space: pre-wrap; overflow-x: auto; padding: 18px 20px; }
-.arch-flow .node { color: var(--text); }
-.arch-flow .gate { color: var(--warn); }
-.arch-flow .arrow { color: var(--muted); }
+.flow-diagram { display: flex; flex-direction: column; padding: 4px 20px 20px; }
+.flow-card { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-left: 4px solid var(--tier-c); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); }
+.flow-card.engine { border-left-color: var(--tier-c); }
+.flow-card.agent { border-left-color: var(--warn); background: #FFF8F0; }
+.flow-card.gate { border-left-color: var(--accent); background: var(--accent-dim); }
+.flow-card .fc-badge { flex-shrink: 0; font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 3px 8px; border-radius: 20px; margin-top: 2px; }
+.flow-card.engine .fc-badge { background: rgba(100,116,139,.16); color: var(--tier-c); }
+.flow-card.agent .fc-badge { background: rgba(180,83,9,.16); color: var(--warn); }
+.flow-card.gate .fc-badge { background: rgba(14,143,118,.16); color: var(--accent); }
+.flow-card h4 { margin: 0 0 4px; font-family: var(--font-head); font-size: 14.5px; font-weight: 600; color: var(--text); }
+.flow-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.flow-connector { display: flex; align-items: center; gap: 8px; padding: 6px 0 6px 18px; color: var(--muted); font-size: 12px; }
+.flow-connector .fc-line { width: 1px; height: 16px; background: var(--line); margin-left: 3px; }
+.flow-connector.branch { color: var(--warn); font-weight: 600; }
 .stack-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px; }
 .stack-col h3 { font-family: var(--font-head); font-size: 13px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
 .stack-col .stack-note { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
@@ -1707,6 +1717,22 @@ function renderConfig() {
 }
 
 /* ------------------------------------------------------------ ARCHITECTURE */
+const PIPELINE_FLOW = [
+  { type: "engine", name: "Source", detail: "A new target account comes in — from a CSV upload, a form, or an API call in a production build." },
+  { type: "engine", name: "Enrich", detail: "Company data is pulled in — in this demo, from a one-time Clay run against real companies, not a live per-visit call." },
+  { type: "engine", name: "Detect signals", detail: "A deterministic rules engine checks the enrichment data for buying signals. No AI is involved in this step." },
+  { type: "engine", name: "Score", detail: "Each signal and firmographic detail adds or subtracts points, using fixed, configurable weights — see ICP Config." },
+  { type: "gate", name: "Gate", branch: "continues only if the score clears the Tier B threshold", detail: "Is this account worth spending AI compute and a seller's attention on? Accounts that don't clear the bar stop here." },
+  { type: "agent", name: "AI research & reasoning", detail: "The only step a language model touches. It synthesizes the evidence into a pain hypothesis — it never sets the score or the routing decision." },
+  { type: "engine", name: "Persona", detail: "A deterministic rule picks which job title to address, based on company size and which signals fired." },
+  { type: "engine", name: "Personalize", detail: "Outreach copy is drafted, referencing only evidence that was actually detected — never invented." },
+  { type: "engine", name: "QA check", detail: "A second deterministic check confirms every claim in the draft traces back to a real, cited signal before anything is shown." },
+  { type: "engine", name: "Sequence", detail: "Tier A accounts get a multi-touch cadence — email, LinkedIn, email, a final touch — spaced over ten days." },
+  { type: "engine", name: "Route", detail: "Score, evidence, and contact-readiness together decide the queue: BDR, contact enrichment, nurture, or suppress." },
+  { type: "gate", name: "Human approval", branch: "required before anything leaves the system", detail: "Nothing above this line can send an email or write to a CRM by itself. A person has to approve it first." },
+  { type: "engine", name: "Learn", detail: "Replies, meetings, and silence feed back into the sequence — automation pauses or stops based on what actually happens." }
+];
+
 const MCP_TOOLS = [
   { name: "search_account", permission: "READ", input: "{ query: string }", returns: "Matching account summaries (name, tier, score, routing status)", cannot: "Cannot modify any record or trigger outreach.", approval: false },
   { name: "get_account_score", permission: "READ", input: "{ account_id: string }", returns: "Full score breakdown, signals, and reasoning for one account", cannot: "Cannot recompute or override the score.", approval: false },
@@ -1735,27 +1761,15 @@ function renderArchitecture() {
         <span class="pf-step gate">Human approval</span><span class="pf-arrow">→</span>
         <span class="pf-step engine">Learn</span>
       </div>
-      <div class="arch-flow"><span class="node">SOURCE — target account (CSV / form / API)</span>
-  <span class="arrow">↓</span>
-<span class="node">ENRICH — company data (Clay)</span>
-  <span class="arrow">↓</span>
-<span class="node">DETECT SIGNALS — deterministic signal engine</span>
-  <span class="arrow">↓</span>
-<span class="node">SCORE — deterministic ICP score, configurable weights</span>
-  <span class="arrow">↓</span>
-<span class="gate">GATE — is this account worth AI compute + seller attention? (score ≥ Tier B threshold)</span>
-  <span class="arrow">↓ if yes</span>
-<span class="node">AI RESEARCH &amp; REASONING — Claude, structured JSON, never sets score/routing</span>
-  <span class="arrow">↓</span>
-<span class="node">PERSONA — identification, deterministic</span>
-  <span class="arrow">↓</span>
-<span class="node">PERSONALIZE — outreach copy grounded in cited evidence</span>
-  <span class="arrow">↓</span>
-<span class="node">SEQUENCE — multi-touch cadence, Tier A</span>
-  <span class="arrow">↓</span>
-<span class="node">ROUTE — score + evidence + contact-readiness rules, logged</span>
-  <span class="arrow">↓</span>
-<span class="node">LEARN — reply/meeting/no-response feedback loop adjusts automation state</span></div>
+      <div class="flow-diagram">
+        ${PIPELINE_FLOW.map((s, i) => `
+          <div class="flow-card ${s.type}">
+            <span class="fc-badge">${s.type.toUpperCase()}</span>
+            <div><h4>${esc(s.name)}</h4><p>${esc(s.detail)}</p></div>
+          </div>
+          ${i < PIPELINE_FLOW.length - 1 ? `<div class="flow-connector${s.branch ? ' branch' : ''}"><div class="fc-line"></div>↓ ${s.branch ? esc(s.branch) : ''}</div>` : ''}
+        `).join("")}
+      </div>
     </div>
 
     <div class="panel">
