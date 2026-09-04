@@ -76,8 +76,9 @@ en evidencia citada.
 ## Estructura
 
 ```
-/public/index.html   → app completa (HTML + CSS + JS), un solo archivo
-/netlify.toml         → configuración de deploy independiente en Netlify
+/public/index.html            → app completa (HTML + CSS + JS), un solo archivo
+/netlify/functions/route-to-bdr.mjs → backend real de orquestación (ver abajo)
+/netlify.toml                  → configuración de deploy independiente en Netlify
 ```
 
 ## Cómo correrlo
@@ -108,8 +109,34 @@ En el mismo detalle de cuenta hay un panel "Live orchestration & CRM sync":
 
 Ambos usan el mismo modelo de confianza que la key de Claude: la credencial es tuya, se usa
 solo para esa llamada directa desde tu navegador, nunca se persiste ni pasa por ningún
-servidor intermedio. Nada de esto se dispara automáticamente para las 6 cuentas — solo
+servidor intermedio. Nada de esto se dispara automáticamente para las 15 cuentas — solo
 cuando alguien hace clic explícitamente en una cuenta.
+
+## Backend real — Netlify Function (para que cualquier visitante lo dispare sin credenciales)
+
+Además del panel "trae tu propia credencial", las 3 cuentas Tier A (Vercel, PostHog, Buffer)
+muestran un botón adicional **"Trigger via site backend"** que llama a
+`/.netlify/functions/route-to-bdr` — una función serverless que guarda tus credenciales del
+lado del servidor (nunca en el repo ni en el HTML público) y las usa para disparar el mismo
+webhook de Zapier + la misma escritura en HubSpot, sin pedirle nada al visitante.
+
+**Para activarlo**, en el dashboard de Netlify de este sitio (Site configuration → Environment
+variables) agrega:
+
+| Variable | Valor |
+|---|---|
+| `ZAPIER_WEBHOOK_URL` | La URL de un Zap real con trigger "Webhooks by Zapier" → "Catch Hook" |
+| `HUBSPOT_TOKEN` | Un access token de un Private App de HubSpot con scopes `crm.objects.contacts.write` y `crm.objects.deals.write` |
+
+Después de guardarlas, Netlify redeploya solo (o dispara un "Clear cache and deploy") y el
+botón queda funcional para cualquier visitante del sitio. Si alguna de las dos variables no
+está configurada, la función responde igual pero marca esa parte como "not configured" en vez
+de fallar silenciosamente.
+
+La función solo acepta los 3 `account_id` que ya cumplen el gate de Tier A + evidencia +
+contacto (`acc_07`, `acc_08`, `acc_09`) — todos los demás datos (nombre, cargo, email del
+contacto) están fijos en el propio código de la función, no llegan desde el navegador, para
+que nadie pueda inyectar datos arbitrarios a tu Zap o tu CRM real.
 
 ## Disclaimer
 

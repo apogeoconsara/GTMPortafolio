@@ -1106,6 +1106,12 @@ function renderAccountDetail(id) {
                 ${LIVE_ORCHESTRATION_FIRED[id]?.hubspot ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">HubSpot: LIVE — synced</span>' : ''}
               </div>
               <div class="claude-status" id="orch-status"></div>
+              ${a.routing.action === "Route to BDR" ? `
+              <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">
+                <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Or trigger it through the site's own backend — no credentials needed from you. This calls a Netlify Function that holds the site owner's Zapier/HubSpot credentials server-side and only accepts the handful of accounts that actually clear the BDR gate (this one included).</p>
+                <button class="btn small primary" id="fire-backend-btn">Trigger via site backend</button>
+                <div class="claude-status" id="backend-status"></div>
+              </div>` : ''}
             </div>
           </div>
         </div>
@@ -1211,6 +1217,31 @@ function renderAccountDetail(id) {
       orchStatus.className = "claude-status err";
     }
   });
+
+  const backendBtn = wrap.querySelector("#fire-backend-btn");
+  if (backendBtn) {
+    backendBtn.addEventListener("click", async () => {
+      const backendStatus = wrap.querySelector("#backend-status");
+      backendStatus.textContent = "Calling site backend...";
+      backendStatus.className = "claude-status";
+      try {
+        const res = await fetch("/.netlify/functions/route-to-bdr", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ account_id: id })
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || `Backend returned ${res.status}`);
+        const zapierMsg = result.zapier?.fired ? "Zapier: fired" : `Zapier: ${result.zapier?.reason || result.zapier?.error || "not configured"}`;
+        const hubspotMsg = result.hubspot?.synced ? "HubSpot: synced" : `HubSpot: ${result.hubspot?.reason || result.hubspot?.error || "not configured"}`;
+        backendStatus.textContent = `${zapierMsg} — ${hubspotMsg}`;
+        backendStatus.className = "claude-status ok";
+      } catch (err) {
+        backendStatus.textContent = "Failed: " + err.message + " — this function only exists once deployed with Netlify Functions enabled; it 404s on older deployments or when run from public/index.html directly.";
+        backendStatus.className = "claude-status err";
+      }
+    });
+  }
 
   return wrap;
 }
@@ -1413,12 +1444,12 @@ function renderArchitecture() {
           <h3>Current prototype</h3>
           <div class="stack-note">Everything below is either running live in this build, or was actually executed once to build the dataset it runs on.</div>
           <ul>
-            <li><span class="live-dot"></span>Clay — real enrichment, executed live for all 6 accounts (find-and-enrich-company + contact search), snapshotted into this static build rather than called per pageview</li>
+            <li><span class="live-dot"></span>Clay — real enrichment, executed live for all 15 accounts (find-and-enrich-company + contact search, including verified emails for the 3 Tier A accounts), snapshotted into this static build rather than called per pageview</li>
             <li><span class="live-dot"></span>JavaScript signal engine — live in this build</li>
             <li><span class="live-dot"></span>Deterministic ICP scoring — live, configurable in ICP Config</li>
             <li><span class="live-dot"></span>Structured AI-response simulator — live (optionally swappable for a real Claude call per account, see below)</li>
             <li><span class="live-dot"></span>Routing engine — live, rule-based</li>
-            <li><span class="live-dot"></span>Zapier webhook + HubSpot CRM write — real, fires per account when a viewer supplies their own credentials (see "Live orchestration" panel on any account)</li>
+            <li><span class="live-dot"></span>Zapier webhook + HubSpot CRM write — real, two paths: a viewer's own credentials via the "Live orchestration" panel, or the site owner's credentials via a Netlify Function (<span class="tag">/.netlify/functions/route-to-bdr</span>) that only accepts the 3 accounts that actually clear the Tier A + evidence + contact gate</li>
             <li><span class="live-dot"></span>Static deployment (Netlify) — live</li>
           </ul>
         </div>
@@ -1431,7 +1462,7 @@ function renderArchitecture() {
             <li><span class="design-dot"></span>Salesforce → CRM system of record (this demo's CRM write targets HubSpot instead, since it's free to test)</li>
             <li><span class="design-dot"></span>Marketo → nurture</li>
             <li><span class="design-dot"></span>Gong Engage → sequencing</li>
-            <li><span class="design-dot"></span>Backend orchestration layer → holding credentials server-side instead of asking each viewer for their own</li>
+            <li><span class="design-dot"></span>Rate limiting / abuse protection on the backend function beyond the account allowlist it already enforces</li>
           </ul>
         </div>
       </div>
