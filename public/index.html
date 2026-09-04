@@ -6,9 +6,14 @@
 <title>GTM AI Outbound Engine</title>
 <style>
 /* Design tokens ------------------------------------------------------------
-   Color: Ink #0F1620 (bg), Panel #161F2C (surfaces), Line #263242 (borders),
-   Text #E7ECF2 (primary) / #8B98A9 (muted), Accent #5B8DEF (identity blue),
-   Tier B #E0A64D (amber), Tier C #55627A (slate)
+   Light theme — white/near-white ground so it reads as a familiar, modern
+   SaaS console rather than a dark ops terminal. Not a verified reproduction
+   of JumpCloud's own brand palette (couldn't fetch their site to confirm
+   exact hex values) — this is a professional identity/security-adjacent
+   teal-green accent chosen to feel at home next to that kind of product.
+   Color: Ink #F7F8FA (bg), Panel #FFFFFF (surfaces), Line #E2E6EB (borders),
+   Text #101828 (primary) / #64748B (muted), Accent #0E8F76 (teal-green),
+   Tier B #B45309 (amber), Tier C #64748B (slate)
    Type: "Space Grotesk" for headings/nav, "IBM Plex Sans" for body,
    "IBM Plex Mono" for scores, signals, code, evidence strings.
    Layout: fixed left rail + main content, left-aligned, dense data tables —
@@ -17,20 +22,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --ink: #0F1620;
-  --panel: #161F2C;
-  --panel-2: #1B2634;
-  --line: #263242;
-  --text: #E7ECF2;
-  --muted: #8B98A9;
-  --accent: #5B8DEF;
-  --accent-dim: #2E4270;
-  --tier-a: #5B8DEF;
-  --tier-b: #E0A64D;
-  --tier-c: #55627A;
-  --good: #4FBF8B;
-  --warn: #E0A64D;
-  --bad: #E1685C;
+  --ink: #F7F8FA;
+  --panel: #FFFFFF;
+  --panel-2: #F1F3F5;
+  --line: #E2E6EB;
+  --text: #101828;
+  --muted: #64748B;
+  --accent: #0E8F76;
+  --accent-dim: #E3F5EF;
+  --tier-a: #0E8F76;
+  --tier-b: #B45309;
+  --tier-c: #64748B;
+  --good: #16A34A;
+  --warn: #B45309;
+  --bad: #DC2626;
   --font-head: 'Space Grotesk', sans-serif;
   --font-body: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
@@ -79,7 +84,7 @@ a { color: var(--accent); text-decoration: none; }
   padding: 4px 8px; border-radius: 4px; margin-bottom: 8px;
 }
 .rail-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.rail-badge.live { background: rgba(79,191,139,.16); color: var(--good); }
+.rail-badge.live { background: rgba(22,163,74,.16); color: var(--good); }
 .rail-badge.live::before { background: var(--good); }
 .rail nav { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; }
 .rail nav button {
@@ -131,15 +136,15 @@ tbody tr:hover { background: var(--panel-2); }
   width: 22px; height: 22px; border-radius: 5px;
   font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
 }
-.tier-pill.A { background: rgba(91,141,239,.16); color: var(--tier-a); }
-.tier-pill.B { background: rgba(224,166,77,.16); color: var(--tier-b); }
-.tier-pill.C { background: rgba(85,98,122,.2); color: var(--tier-c); }
+.tier-pill.A { background: rgba(14,143,118,.16); color: var(--tier-a); }
+.tier-pill.B { background: rgba(180,83,9,.16); color: var(--tier-b); }
+.tier-pill.C { background: rgba(100,116,139,.2); color: var(--tier-c); }
 
 .tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; display: inline-block; }
-.tag.route-bdr { color: var(--good); border-color: rgba(79,191,139,.35); }
-.tag.route-enrich { color: var(--warn); border-color: rgba(224,166,77,.35); }
-.tag.route-nurture { color: var(--accent); border-color: rgba(91,141,239,.35); }
-.tag.route-suppress { color: var(--bad); border-color: rgba(225,104,92,.35); }
+.tag.route-bdr { color: var(--good); border-color: rgba(22,163,74,.35); }
+.tag.route-enrich { color: var(--warn); border-color: rgba(180,83,9,.35); }
+.tag.route-nurture { color: var(--accent); border-color: rgba(14,143,118,.35); }
+.tag.route-suppress { color: var(--bad); border-color: rgba(220,38,38,.35); }
 
 /* --- Detail view --- */
 .detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
@@ -156,15 +161,15 @@ tbody tr:hover { background: var(--panel-2); }
 .evidence-card .meta { display: flex; gap: 14px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 .evidence-card .evidence-text { font-family: var(--font-mono); font-size: 12px; color: var(--text); margin-top: 4px; }
 .pill-conf { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 6px; border-radius: 4px; }
-.pill-conf.high { background: rgba(79,191,139,.16); color: var(--good); }
-.pill-conf.medium { background: rgba(224,166,77,.16); color: var(--warn); }
-.pill-conf.low, .pill-conf\.n\/a { background: rgba(85,98,122,.2); color: var(--muted); }
+.pill-conf.high { background: rgba(22,163,74,.16); color: var(--good); }
+.pill-conf.medium { background: rgba(180,83,9,.16); color: var(--warn); }
+.pill-conf.low, .pill-conf\.n\/a { background: rgba(100,116,139,.2); color: var(--muted); }
 .reasoning-block { font-size: 13.5px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .reasoning-block:last-child { border-bottom: none; }
 .reasoning-block .k { color: var(--muted); font-size: 11.5px; text-transform: none; margin-bottom: 4px; }
 .inference-tag { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; margin-right: 6px; letter-spacing: .02em; }
-.inference-tag.INFERENCE { background: rgba(224,166,77,.18); color: var(--warn); }
-.inference-tag.FACT { background: rgba(79,191,139,.16); color: var(--good); }
+.inference-tag.INFERENCE { background: rgba(180,83,9,.18); color: var(--warn); }
+.inference-tag.FACT { background: rgba(22,163,74,.16); color: var(--good); }
 .outreach-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 14px; font-size: 13.5px; }
 .outreach-card .subj { font-weight: 600; margin-bottom: 8px; }
 .back-btn { all: unset; cursor: pointer; color: var(--accent); font-size: 13px; margin-bottom: 16px; display: inline-block; }
@@ -206,8 +211,8 @@ tbody tr:hover { background: var(--panel-2); }
   border: 1px dashed var(--line); border-radius: 6px; padding: 9px 12px; margin-bottom: 18px;
 }
 .icp-note {
-  font-size: 12.5px; color: var(--warn); background: rgba(224,166,77,.08);
-  border: 1px dashed rgba(224,166,77,.4); border-radius: 6px; padding: 10px 12px; margin-bottom: 18px;
+  font-size: 12.5px; color: var(--warn); background: rgba(180,83,9,.08);
+  border: 1px dashed rgba(180,83,9,.4); border-radius: 6px; padding: 10px 12px; margin-bottom: 18px;
 }
 
 /* --- MCP tool cards --- */
@@ -216,9 +221,9 @@ tbody tr:hover { background: var(--panel-2); }
 .mcp-tool-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--panel-2); flex-wrap: wrap; }
 .mcp-tool-head .tname { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
 .perm-pill { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: .02em; }
-.perm-pill.READ { background: rgba(91,141,239,.16); color: var(--accent); }
-.perm-pill.WRITE { background: rgba(225,104,92,.16); color: var(--bad); }
-.approval-pill { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 4px; background: rgba(224,166,77,.16); color: var(--warn); }
+.perm-pill.READ { background: rgba(14,143,118,.16); color: var(--accent); }
+.perm-pill.WRITE { background: rgba(220,38,38,.16); color: var(--bad); }
+.approval-pill { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 8px; border-radius: 4px; background: rgba(180,83,9,.16); color: var(--warn); }
 .mcp-tool-body { padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; font-size: 12.5px; }
 .mcp-tool-body .k { color: var(--muted); font-size: 11px; margin-bottom: 3px; }
 .mcp-tool-body .v { font-family: var(--font-mono); font-size: 12px; }
@@ -237,7 +242,8 @@ tbody tr:hover { background: var(--panel-2); }
 .cfg-actions { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--line); }
 .btn { all: unset; cursor: pointer; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); color: var(--text); }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.btn.primary:hover { background: #0B7862; }
 .btn.small { padding: 5px 10px; font-size: 11.5px; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 
@@ -255,9 +261,9 @@ tbody tr:hover { background: var(--panel-2); }
 .run-step { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .run-step:last-child { border-bottom: none; }
 .run-step .badge { flex-shrink: 0; width: 60px; text-align: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 3px 0; border-radius: 4px; letter-spacing: .02em; height: fit-content; }
-.run-step .badge.engine { background: rgba(85,98,122,.2); color: var(--muted); }
-.run-step .badge.agent { background: rgba(224,166,77,.18); color: var(--warn); }
-.run-step .badge.gate { background: rgba(91,141,239,.16); color: var(--accent); }
+.run-step .badge.engine { background: rgba(100,116,139,.2); color: var(--muted); }
+.run-step .badge.agent { background: rgba(180,83,9,.18); color: var(--warn); }
+.run-step .badge.gate { background: rgba(14,143,118,.16); color: var(--accent); }
 .run-step .name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
 .run-step .detail { color: var(--muted); font-size: 12.5px; }
 .run-step .detail.fail { color: var(--bad); }
@@ -266,9 +272,9 @@ tbody tr:hover { background: var(--panel-2); }
 .ops-criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pill-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 16px 20px 4px; }
 .pill-flow .pf-step { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 20px; letter-spacing: .02em; }
-.pill-flow .pf-step.engine { background: rgba(85,98,122,.2); color: var(--muted); }
-.pill-flow .pf-step.agent { background: rgba(224,166,77,.18); color: var(--warn); }
-.pill-flow .pf-step.gate { background: rgba(91,141,239,.16); color: var(--accent); }
+.pill-flow .pf-step.engine { background: rgba(100,116,139,.2); color: var(--muted); }
+.pill-flow .pf-step.agent { background: rgba(180,83,9,.18); color: var(--warn); }
+.pill-flow .pf-step.gate { background: rgba(14,143,118,.16); color: var(--accent); }
 .pill-flow .pf-arrow { color: var(--muted); font-size: 12px; }
 .decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
@@ -289,7 +295,7 @@ tbody tr:hover { background: var(--panel-2); }
 .ask-turn .q { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
 .ask-turn .a { color: var(--muted); font-size: 13px; line-height: 1.55; background: var(--panel-2); border-radius: 6px; padding: 9px 11px; }
 
-.jc-box { border: 1px solid rgba(91,141,239,.35); background: rgba(91,141,239,.06); border-radius: 8px; padding: 14px; }
+.jc-box { border: 1px solid rgba(14,143,118,.35); background: rgba(14,143,118,.06); border-radius: 8px; padding: 14px; }
 .jc-box h3 { margin: 0 0 8px; font-family: var(--font-head); font-size: 13px; }
 .jc-box ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text); }
 .jc-box ul li { margin-bottom: 6px; }
@@ -1139,7 +1145,7 @@ function renderAccountDetail(id) {
   const wrap = el(`<div>
     <button class="back-btn" id="back">&larr; Back</button>
     <div class="page-head">
-      <h1>${esc(c.company_name)} ${isLive ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">LIVE CLAUDE</span>' : ''}</h1>
+      <h1>${esc(c.company_name)} ${isLive ? '<span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">LIVE CLAUDE</span>' : ''}</h1>
       <p>${esc(c.company_description)}</p>
     </div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -1306,12 +1312,12 @@ function renderAccountDetail(id) {
               <input type="text" id="zapier-url-input" placeholder="https://hooks.zapier.com/hooks/catch/..." value="${ZAPIER_WEBHOOK_URL ? esc(ZAPIER_WEBHOOK_URL) : ""}" style="margin-bottom:8px" />
               <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
                 <button class="btn small" id="fire-zapier-btn">Send test webhook to Zapier</button>
-                ${LIVE_ORCHESTRATION_FIRED[id]?.zapier ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">Zapier: LIVE — fired</span>' : ''}
+                ${LIVE_ORCHESTRATION_FIRED[id]?.zapier ? '<span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">Zapier: LIVE — fired</span>' : ''}
               </div>
               <input type="password" id="hubspot-token-input" placeholder="HubSpot private app token (pat-...)" value="${HUBSPOT_TOKEN ? esc(HUBSPOT_TOKEN) : ""}" style="margin-bottom:8px" />
               <div style="display:flex;gap:10px;align-items:center">
                 <button class="btn small" id="fire-hubspot-btn">Create/update HubSpot contact + deal</button>
-                ${LIVE_ORCHESTRATION_FIRED[id]?.hubspot ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">HubSpot: LIVE — synced</span>' : ''}
+                ${LIVE_ORCHESTRATION_FIRED[id]?.hubspot ? '<span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">HubSpot: LIVE — synced</span>' : ''}
               </div>
               <div class="claude-status" id="orch-status"></div>
               ${a.routing.action === "Route to BDR" ? `
@@ -1793,7 +1799,7 @@ function renderArchitecture() {
       <div class="body-pad" style="font-size:13.5px;color:var(--muted);line-height:1.7">
         The AI Research &amp; Reasoning step is the only place a model is allowed to touch this pipeline — never scoring, never routing.
         Open any account's detail page and use "Run live Claude reasoning" to see this wired to the real Anthropic API with your own key
-        (client-side call, key never persisted). When active, the rail shows an <span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">AI mode: LIVE CLAUDE</span> badge.
+        (client-side call, key never persisted). When active, the rail shows an <span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">AI mode: LIVE CLAUDE</span> badge.
         <br><br>
         The same account detail page also has a "Live orchestration &amp; CRM sync" panel — paste your own Zapier catch-hook URL and/or
         HubSpot private-app token and the "Route to BDR"-style actions actually fire: a real webhook delivery, a real Contact + Deal
