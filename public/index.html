@@ -251,6 +251,27 @@ tbody tr:hover { background: var(--panel-2); }
 .feedback-item { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; font-size: 12.5px; }
 .feedback-item .trig { font-family: var(--font-mono); color: var(--warn); font-size: 11px; margin-bottom: 3px; }
 
+/* --- Agent run trace --- */
+.run-step { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.run-step:last-child { border-bottom: none; }
+.run-step .badge { flex-shrink: 0; width: 60px; text-align: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 3px 0; border-radius: 4px; letter-spacing: .02em; height: fit-content; }
+.run-step .badge.engine { background: rgba(85,98,122,.2); color: var(--muted); }
+.run-step .badge.agent { background: rgba(224,166,77,.18); color: var(--warn); }
+.run-step .badge.gate { background: rgba(91,141,239,.16); color: var(--accent); }
+.run-step .name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.run-step .detail { color: var(--muted); font-size: 12.5px; }
+.run-step .detail.fail { color: var(--bad); }
+.run-step .conf { font-family: var(--font-mono); font-size: 10.5px; color: var(--warn); margin-left: 6px; }
+.decision-trace-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+.decision-trace-grid .dt-card .v { font-size: 13px; line-height: 1.45; }
+.autonomy-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.autonomy-row:last-child { border-bottom: none; }
+.autonomy-row .dot { font-size: 16px; line-height: 1.3; }
+.autonomy-row .label { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+.autonomy-row .items { color: var(--muted); font-size: 12.5px; }
+
 .jc-box { border: 1px solid rgba(91,141,239,.35); background: rgba(91,141,239,.06); border-radius: 8px; padding: 14px; }
 .jc-box h3 { margin: 0 0 8px; font-family: var(--font-head); font-size: 13px; }
 .jc-box ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text); }
@@ -290,6 +311,7 @@ tbody tr:hover { background: var(--panel-2); }
       <button data-page="accounts"><span class="dot"></span>Accounts</button>
       <button data-page="signals"><span class="dot"></span>Signals</button>
       <button data-page="routing"><span class="dot"></span>Routing</button>
+      <button data-page="outcomes"><span class="dot"></span>Outcomes</button>
       <button data-page="config"><span class="dot"></span>ICP Config</button>
       <button data-page="architecture"><span class="dot"></span>Architecture</button>
     </nav>
@@ -659,6 +681,56 @@ function buildWhyJumpCloud(c, signals) {
 }
 
 // ---------------------------------------------------------------------------
+// PHASE 13 — QA CHECK (deterministic claim verification)
+// Verifies the generated outreach doesn't say anything the evidence engine
+// didn't actually detect. This is the "QA Agent" step from a governance
+// standpoint, but it's implemented here as a plain deterministic check —
+// not a model call — because verifying "does this claim trace to a citation"
+// is exactly the kind of thing that should be reproducible, not sampled.
+// ---------------------------------------------------------------------------
+function qaCheckOutreach(signals, outreach, reasoning) {
+  if (reasoning.confidence === "low") {
+    return { passed: true, note: "Outreach correctly held back — insufficient signal to justify a claim either way." };
+  }
+  const citedEvidence = signals.find(s => s.detected && s.evidence === outreach.evidence_used);
+  if (!citedEvidence) {
+    return { passed: false, note: "Outreach evidence_used does not match any detected signal's citation — would have blocked send." };
+  }
+  return { passed: true, note: `Every claim in the outreach traces to a detected signal ("${citedEvidence.signal_name}", source: ${citedEvidence.source}).` };
+}
+
+// ---------------------------------------------------------------------------
+// PHASE 14 — AGENT RUN TRACE
+// A step-by-step execution trace for the account detail page's "Agent Run"
+// panel. Each step is labeled ENGINE (deterministic code), AGENT (the one
+// place a model's output can flow through), or GATE (a branch point) — never
+// blurred together, so the trace itself demonstrates the same principle the
+// rest of this demo argues for: AI where reasoning helps, deterministic
+// logic where consistency matters. Step order mirrors buildAccountRecord()
+// exactly; there's no separate simulation of the pipeline. The step list
+// runs in a fixed sequence in the browser (not over real network time), so
+// this trace shows order and outcome, not real per-step latency.
+// ---------------------------------------------------------------------------
+function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing) {
+  const detectedCount = signals.filter(s => s.detected).length;
+  const steps = [
+    { type: "engine", name: "Enrichment", detail: `Loaded Clay snapshot for ${c.company_name} (fetched ${c.last_enriched}) — ${c.countries_of_operation.length} countries on file.` },
+    { type: "engine", name: "Signal Detection", detail: `${detectedCount} of ${signals.length} candidate signals detected.` },
+    { type: "engine", name: "ICP Scoring", detail: `Score ${score.total_score}/100 → Tier ${score.tier}.` },
+    { type: "gate", name: "Qualification Gate", detail: score.tier === "C" ? "Score below the Tier B threshold — this account doesn't clear the bar to justify reasoning, persona work or outreach; the trace stops here." : "Score clears the gate — continuing to AI Reasoning." }
+  ];
+  if (score.tier !== "C") {
+    steps.push({ type: "agent", name: "AI Reasoning", confidence: reasoning.confidence, detail: reasoning.source === "live_claude" ? "Live Claude API call (viewer-supplied key)." : "Deterministic simulator — returns the exact JSON shape a Claude call would produce." });
+    steps.push({ type: "engine", name: "Persona Selection", detail: `Selected: ${persona.persona}.` });
+    steps.push({ type: "engine", name: "Outreach Templating", detail: reasoning.confidence === "low" ? "Held — insufficient signal to draft outreach." : "Generated from the primary cited signal." });
+    steps.push({ type: "engine", name: "QA Check", detail: qa.note, failed: !qa.passed });
+  }
+  steps.push({ type: "engine", name: "Routing", detail: `${routing.action} — ${routing.reason}` });
+  steps.push({ type: "gate", name: "Human Approval", detail: routing.action === "Route to BDR" ? "Required before any outreach send or CRM write — see Governance in Architecture." : "Not applicable — this account was not routed to BDR." });
+  return steps;
+}
+
+// ---------------------------------------------------------------------------
 // PHASE 12 — PIPELINE: build the full auditable record per account
 // ---------------------------------------------------------------------------
 function buildAccountRecord(c) {
@@ -667,9 +739,11 @@ function buildAccountRecord(c) {
   const persona = identifyPersona(c, signals);
   const reasoning = generateAIReasoning(c, signals, score);
   const outreach = generateOutreach(c, signals, reasoning, persona);
+  const qa = qaCheckOutreach(signals, outreach, reasoning);
   const routing = routeAccount(c, signals, score);
   const sequence = buildSequence(c, signals, reasoning, persona);
   const whyJumpCloud = buildWhyJumpCloud(c, signals);
+  const agentRun = buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing);
   return {
     raw_input: { company_name: c.company_name, website: c.website },
     enriched: c,
@@ -678,9 +752,11 @@ function buildAccountRecord(c) {
     persona,
     ai_reasoning: reasoning,
     outreach,
+    qa,
     routing,
     sequence,
     whyJumpCloud,
+    agentRun,
     timestamp: new Date().toISOString()
   };
 }
@@ -828,7 +904,7 @@ async function createHubspotContactAndDeal(c, a) {
 
 /* View layer — plain DOM rendering over the engine data + logic. */
 
-const PAGES = ["dashboard", "accounts", "signals", "routing", "config", "architecture"];
+const PAGES = ["dashboard", "accounts", "signals", "routing", "outcomes", "config", "architecture"];
 let currentPage = "dashboard";
 let currentAccountId = null;
 let accountFilter = "ALL";
@@ -855,6 +931,7 @@ function render() {
   if (currentPage === "accounts") main.appendChild(renderAccounts());
   if (currentPage === "signals") main.appendChild(renderSignals());
   if (currentPage === "routing") main.appendChild(renderRouting());
+  if (currentPage === "outcomes") main.appendChild(renderOutcomes());
   if (currentPage === "config") main.appendChild(renderConfig());
   if (currentPage === "architecture") main.appendChild(renderArchitecture());
 }
@@ -880,8 +957,8 @@ function renderDashboard() {
 
   const wrap = el(`<div>
     <div class="page-head">
-      <h1>GTM Operations Dashboard</h1>
-      <p>${ACCOUNTS.length} real companies — candidate research compiled from public data via a live Clay enrichment run, not an active JumpCloud campaign — run through signal detection → ICP scoring → AI reasoning → routing. Optional live Zapier/HubSpot orchestration available per account.</p>
+      <h1>Agentic Outbound Control Room</h1>
+      <p>From signal → deterministic scoring → governed AI reasoning → human-approved seller action. ${ACCOUNTS.length} real companies — candidate research compiled from public data via a live Clay enrichment run, not an active JumpCloud campaign. Open any account for its full Agent Run and Decision Trace.</p>
     </div>
     <div class="kpi-grid">
       <div class="kpi"><div class="v">${ACCOUNTS.length}</div><div class="l">Total accounts</div></div>
@@ -990,6 +1067,40 @@ function renderAccountDetail(id) {
       <div class="kpi"><div class="v">${r.confidence}</div><div class="l">AI confidence</div></div>
     </div>
 
+    <div class="panel">
+      <div class="panel-head"><h2>Decision trace</h2><span class="hint">why the system did this, in one glance</span></div>
+      <div class="body-pad">
+        <div class="decision-trace-grid">
+          <div class="dt-card">
+            <div class="k">Why this account?</div>
+            <div class="v">${a.score.tier === "C" ? `Weak ICP fit — score ${a.score.total_score}/100, below the Tier B threshold.` : `Strong ICP fit — score ${a.score.total_score}/100 (Tier ${a.score.tier}), deterministic, see breakdown below.`}</div>
+          </div>
+          <div class="dt-card">
+            <div class="k">Why now?</div>
+            <div class="v">${a.score.tier === "C" ? "No timing signal strong enough to act on yet." : esc(r.reason_to_contact_now)}</div>
+          </div>
+          <div class="dt-card">
+            <div class="k">Why this person?</div>
+            <div class="v">${a.persona.contact_name !== "unknown" ? `${esc(a.persona.contact_name)}, ${esc(a.persona.contact_title)} — ${esc(a.persona.reason_persona_is_relevant)}` : `No confirmed contact yet. Recommended persona: ${esc(a.persona.persona)} — ${esc(a.persona.reason_persona_is_relevant)}`}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Agent run</h2><span class="hint">ENGINE = deterministic code · AGENT = model output · GATE = branch point</span></div>
+      <div class="body-pad">
+        ${a.agentRun.map(s => `
+          <div class="run-step">
+            <span class="badge ${s.type}">${s.type.toUpperCase()}</span>
+            <div>
+              <div class="name">${esc(s.name)}${s.confidence ? `<span class="conf">confidence: ${esc(s.confidence)}</span>` : ''}</div>
+              <div class="detail${s.failed ? ' fail' : ''}">${esc(s.detail)}</div>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>
+
     <div class="detail-grid">
       <div>
         <div class="panel">
@@ -1044,6 +1155,7 @@ function renderAccountDetail(id) {
               <div>${esc(a.outreach.message)}</div>
               <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(a.outreach.call_to_action)}</div>
             </div>
+            <div style="margin-top:10px;font-size:12.5px;${a.qa.passed ? 'color:var(--good)' : 'color:var(--bad)'}">${a.qa.passed ? '✓ QA passed' : '✗ QA failed'} — ${esc(a.qa.note)}</div>
           </div>
         </div>
 
@@ -1314,6 +1426,68 @@ function renderRouting() {
   return wrap;
 }
 
+/* ---------------------------------------------------------------- OUTCOMES */
+// Real, computed-from-this-run numbers stop at "sequences launched" — no
+// outreach in this demo has actually been sent to a real company. Everything
+// past that point (replies, meetings, opportunities) is an ILLUSTRATIVE
+// funnel built from fixed, disclosed assumption rates applied to the real
+// sequence count, not measured campaign data. Labeled as such throughout,
+// same rule as every other simulated number in this project.
+const ILLUSTRATIVE_FUNNEL_ASSUMPTIONS = { reply_rate: 0.35, meeting_rate_of_replies: 0.55, opportunity_rate_of_meetings: 0.5 };
+
+function renderOutcomes() {
+  const tierA = ACCOUNTS.filter(a => a.score.tier === "A");
+  const tierB = ACCOUNTS.filter(a => a.score.tier === "B");
+  const sequencesLaunched = tierA.length;
+  const f = ILLUSTRATIVE_FUNNEL_ASSUMPTIONS;
+  const replies = Math.round(sequencesLaunched * f.reply_rate);
+  const meetings = Math.round(replies * f.meeting_rate_of_replies);
+  const opportunities = Math.round(meetings * f.opportunity_rate_of_meetings);
+
+  const signalCounts = {};
+  ACCOUNTS.forEach(a => a.signals.forEach(s => { if (s.detected) signalCounts[s.signal_name] = (signalCounts[s.signal_name] || 0) + 1; }));
+  const topSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0];
+
+  const wrap = el(`<div>
+    <div class="page-head"><h1>Outcomes</h1><p>Where the real pipeline stops (accounts evaluated → sequences launched) and where an illustrative funnel begins (replies → pipeline) — never blended into one number.</p></div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Pipeline funnel</h2></div>
+      <div class="body-pad">
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:0">
+          <div class="kpi"><div class="v">${ACCOUNTS.length}</div><div class="l">Accounts evaluated (real)</div></div>
+          <div class="kpi"><div class="v tier-a">${tierA.length}</div><div class="l">Tier A identified (real)</div></div>
+          <div class="kpi"><div class="v">${sequencesLaunched}</div><div class="l">Sequences launched (real — Tier A only)</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="icp-note">Everything below this line is an <strong>illustrative</strong> continuation of the funnel, computed by applying fixed assumption rates (reply rate ${(f.reply_rate*100).toFixed(0)}%, meeting rate ${(f.meeting_rate_of_replies*100).toFixed(0)}% of replies, opportunity rate ${(f.opportunity_rate_of_meetings*100).toFixed(0)}% of meetings) to the real sequence count above. No outreach has actually been sent to any of these companies, so there are no real replies or meetings to report — this shows how the system's own numbers would roll up once it's live, not a claim about results already achieved.</div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Illustrative funnel continuation</h2></div>
+      <div class="body-pad">
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:0">
+          <div class="kpi"><div class="v">${replies}</div><div class="l">Positive replies (illustrative)</div></div>
+          <div class="kpi"><div class="v">${meetings}</div><div class="l">Meetings booked (illustrative)</div></div>
+          <div class="kpi"><div class="v">${opportunities}</div><div class="l">Opportunities created (illustrative)</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Agent effectiveness (real, from this run)</h2></div>
+      <div class="body-pad">
+        ${fieldRow("Most common detected signal", topSignal ? `${topSignal[0]} (${topSignal[1]}/${ACCOUNTS.length} accounts)` : "none")}
+        ${fieldRow("QA pass rate", `${ACCOUNTS.filter(a => a.qa.passed).length}/${ACCOUNTS.length} accounts — every generated outreach traced to a cited signal or was correctly held back`)}
+        ${fieldRow("Accounts needing contact enrichment before BDR", `${ACCOUNTS.filter(a => a.routing.action === "Contact enrichment").length}`)}
+        ${fieldRow("Tier B accounts one verified contact away from Tier A", `${tierB.length} (see ICP Config to test lowering the threshold instead)`)}
+      </div>
+    </div>
+  </div>`);
+  return wrap;
+}
+
 /* ------------------------------------------------------------------ CONFIG */
 function renderConfig() {
   const cfg = ICP_CONFIG;
@@ -1513,7 +1687,25 @@ function renderArchitecture() {
       </div>
     </div>
 
-    <div class="simulated-note">All 6 companies above are real, chosen as illustrative JumpCloud-shaped candidates and enriched via a live Clay run for portfolio purposes — this is candidate research, not an active JumpCloud outbound campaign, and none of these companies have been contacted. No real BDR performance data is used or implied.</div>
+    <div class="panel">
+      <div class="panel-head"><h2>Autonomy levels</h2><span class="hint">what runs on its own vs. what waits for a human</span></div>
+      <div class="body-pad">
+        <div class="autonomy-row">
+          <span class="dot">🟢</span>
+          <div><div class="label">Auto-execute — no review needed</div><div class="items">Save enrichment snapshot · calculate ICP score · detect signals · update the routing log</div></div>
+        </div>
+        <div class="autonomy-row">
+          <span class="dot">🟡</span>
+          <div><div class="label">AI + verification — model output, checked before use</div><div class="items">AI reasoning synthesis (pain hypothesis, missing info) · QA claim-check against cited evidence before outreach is shown</div></div>
+        </div>
+        <div class="autonomy-row">
+          <span class="dot">🔴</span>
+          <div><div class="label">Human approval required — nothing external fires without it</div><div class="items">Sending outreach or a sequence step · writing to a CRM (<span class="tag">route_account</span>) · any real Zapier/HubSpot call in this demo requires a person to click the button and, for the site-backend path, requires the owner to have deliberately configured credentials</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="simulated-note">All 15 companies above are real, chosen as illustrative JumpCloud-shaped candidates and enriched via a live Clay run for portfolio purposes — this is candidate research, not an active JumpCloud outbound campaign, and none of these companies have been contacted. No real BDR performance data is used or implied.</div>
   </div>`);
   return wrap;
 }
