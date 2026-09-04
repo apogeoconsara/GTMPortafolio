@@ -19,7 +19,7 @@
    Layout: fixed left rail + main content, left-aligned, dense data tables —
    this reads as an internal ops console, not a marketing page.
 ---------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 :root {
   --ink: #F7F8FA;
@@ -36,7 +36,12 @@
   --good: #16A34A;
   --warn: #B45309;
   --bad: #DC2626;
-  --font-head: 'Space Grotesk', sans-serif;
+  --rail-bg: #0B2340;
+  --rail-bg-2: #123258;
+  --rail-text: #F3F6FA;
+  --rail-muted: #93A9C7;
+  --rail-line: rgba(255,255,255,.08);
+  --font-head: 'Inter', sans-serif;
   --font-body: 'IBM Plex Sans', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 }
@@ -61,8 +66,8 @@ a { color: var(--accent); text-decoration: none; }
 .rail {
   width: 240px;
   flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
+  background: var(--rail-bg);
+  border-right: 1px solid var(--rail-line);
   padding: 22px 16px;
   position: sticky;
   top: 0;
@@ -75,25 +80,26 @@ a { color: var(--accent); text-decoration: none; }
   font-size: 16px;
   letter-spacing: -0.01em;
   margin-bottom: 2px;
+  color: var(--rail-text);
 }
-.rail-sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+.rail-sub { color: var(--rail-muted); font-size: 12px; margin-bottom: 14px; }
 .rail-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--accent-dim); color: var(--accent);
+  background: rgba(255,255,255,.1); color: #6FE3C4;
   font-family: var(--font-mono); font-size: 11px;
   padding: 4px 8px; border-radius: 4px; margin-bottom: 8px;
 }
-.rail-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.rail-badge.live { background: rgba(22,163,74,.16); color: var(--good); }
-.rail-badge.live::before { background: var(--good); }
+.rail-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: #6FE3C4; }
+.rail-badge.live { background: rgba(255,255,255,.1); color: #7BE0A0; }
+.rail-badge.live::before { background: #7BE0A0; }
 .rail nav { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; }
 .rail nav button {
   all: unset; cursor: pointer;
-  color: var(--muted); font-family: var(--font-body); font-size: 13.5px; font-weight: 500;
+  color: var(--rail-muted); font-family: var(--font-body); font-size: 13.5px; font-weight: 500;
   padding: 9px 10px; border-radius: 6px; display: flex; align-items: center; gap: 9px;
 }
-.rail nav button:hover { background: var(--panel-2); color: var(--text); }
-.rail nav button.active { background: var(--accent-dim); color: var(--text); }
+.rail nav button:hover { background: var(--rail-bg-2); color: var(--rail-text); }
+.rail nav button.active { background: var(--rail-bg-2); color: var(--rail-text); box-shadow: inset 3px 0 0 var(--accent); }
 .rail nav button .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
 
 /* --- Main --- */
@@ -136,9 +142,9 @@ tbody tr:hover { background: var(--panel-2); }
   width: 22px; height: 22px; border-radius: 5px;
   font-family: var(--font-mono); font-size: 11.5px; font-weight: 700;
 }
-.tier-pill.A { background: rgba(14,143,118,.16); color: var(--tier-a); }
-.tier-pill.B { background: rgba(180,83,9,.16); color: var(--tier-b); }
-.tier-pill.C { background: rgba(100,116,139,.2); color: var(--tier-c); }
+.tier-pill.A { background: var(--tier-a); color: #FFFFFF; }
+.tier-pill.B { background: var(--tier-b); color: #FFFFFF; }
+.tier-pill.C { background: var(--tier-c); color: #FFFFFF; }
 
 .tag { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 7px; display: inline-block; }
 .tag.route-bdr { color: var(--good); border-color: rgba(22,163,74,.35); }
