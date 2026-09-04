@@ -14,12 +14,12 @@
    Color: Ink #F7F8FA (bg), Panel #FFFFFF (surfaces), Line #E2E6EB (borders),
    Text #101828 (primary) / #64748B (muted), Accent #0E8F76 (teal-green),
    Tier B #B45309 (amber), Tier C #64748B (slate)
-   Type: "Space Grotesk" for headings/nav, "IBM Plex Sans" for body,
-   "IBM Plex Mono" for scores, signals, code, evidence strings.
+   Type: "Inter" for headings/nav, "IBM Plex Sans" for everything else —
+   no monospace anywhere, including scores, tags, and code-like values.
    Layout: fixed left rail + main content, left-aligned, dense data tables —
    this reads as an internal ops console, not a marketing page.
 ---------------------------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 
 :root {
   --ink: #F7F8FA;
@@ -43,7 +43,7 @@
   --rail-line: rgba(255,255,255,.08);
   --font-head: 'Inter', sans-serif;
   --font-body: 'IBM Plex Sans', sans-serif;
-  --font-mono: 'IBM Plex Mono', monospace;
+  --font-mono: 'IBM Plex Sans', sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -114,7 +114,7 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
   padding: 16px 16px 14px;
 }
-.kpi .v { font-family: var(--font-mono); font-size: 26px; font-weight: 600; }
+.kpi .v { font-family: var(--font-head); font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kpi .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .kpi .v.tier-a { color: var(--tier-a); }
 .kpi .v.tier-b { color: var(--tier-b); }
@@ -135,7 +135,7 @@ td { padding: 11px 16px; border-bottom: 1px solid var(--line); font-size: 13.5px
 tr:last-child td { border-bottom: none; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--panel-2); }
-.score { font-family: var(--font-mono); font-weight: 600; }
+.score { font-family: var(--font-body); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .tier-pill {
   display: inline-flex; align-items: center; justify-content: center;
@@ -183,7 +183,7 @@ tbody tr:hover { background: var(--panel-2); }
 .score-bars { display: flex; flex-direction: column; gap: 10px; }
 .score-bar-row { }
 .score-bar-row .lbl { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 4px; }
-.score-bar-row .lbl .n { font-family: var(--font-mono); color: var(--text); }
+.score-bar-row .lbl .n { font-family: var(--font-body); font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
 .bar-track { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
 .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
 
