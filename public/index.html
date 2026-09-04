@@ -967,10 +967,15 @@ function renderDashboard() {
       <div class="kpi"><div class="v tier-c">${tierC.length}</div><div class="l">Tier C</div></div>
       <div class="kpi"><div class="v">${avg}</div><div class="l">Average ICP score</div></div>
       <div class="kpi"><div class="v">${signalCoverage}%</div><div class="l">Signal coverage — accounts with ≥1 active signal</div></div>
-      <div class="kpi"><div class="v">${routedBDR}</div><div class="l">Routed to BDR (simulated)</div></div>
+      <div class="kpi"><div class="v">${routedBDR}</div><div class="l">Routed to BDR (real accounts)</div></div>
       <div class="kpi"><div class="v">${bdrRoutingRate}%</div><div class="l">BDR routing rate — Tier A routed / total evaluated</div></div>
     </div>
-    <div class="simulated-note">"Qualification rate" is ambiguous, so it's reported two ways here: <strong>signal coverage</strong> (has ≥1 detected signal — not the same as being qualified) and <strong>BDR routing rate</strong> (actually cleared score + evidence + contact-readiness gates, ${trueQualRate}% of accounts also land in Tier A or B if you want a broader "qualified" definition).</div>
+    <div class="simulated-note">
+      "Qualification rate" means different things to different people, so instead of picking one, here are the three readings side by side:<br>
+      <strong>Signal coverage</strong> (${signalCoverage}%) — has at least 1 detected signal. The lowest bar; almost says nothing on its own.<br>
+      <strong>BDR routing rate</strong> (${bdrRoutingRate}%) — actually cleared all three gates: score, evidence, and a known contact. This is the number that matters.<br>
+      <strong>Tier A + B combined</strong> (${trueQualRate}%) — a looser definition: decent score, even without a verified contact yet.
+    </div>
     <div class="panel">
       <div class="panel-head"><h2>Top buying signals across the book</h2></div>
       <div class="body-pad">
