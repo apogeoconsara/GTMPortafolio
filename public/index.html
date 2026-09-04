@@ -263,6 +263,13 @@ tbody tr:hover { background: var(--panel-2); }
 .run-step .detail.fail { color: var(--bad); }
 .run-step .conf { font-family: var(--font-mono); font-size: 10.5px; color: var(--warn); margin-left: 6px; }
 .decision-trace-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.ops-criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pill-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 16px 20px 4px; }
+.pill-flow .pf-step { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 20px; letter-spacing: .02em; }
+.pill-flow .pf-step.engine { background: rgba(85,98,122,.2); color: var(--muted); }
+.pill-flow .pf-step.agent { background: rgba(224,166,77,.18); color: var(--warn); }
+.pill-flow .pf-step.gate { background: rgba(91,141,239,.16); color: var(--accent); }
+.pill-flow .pf-arrow { color: var(--muted); font-size: 12px; }
 .decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
 .decision-trace-grid .dt-card .v { font-size: 13px; line-height: 1.45; }
@@ -271,6 +278,16 @@ tbody tr:hover { background: var(--panel-2); }
 .autonomy-row .dot { font-size: 16px; line-height: 1.3; }
 .autonomy-row .label { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
 .autonomy-row .items { color: var(--muted); font-size: 12.5px; }
+
+/* --- Ask the agent --- */
+.ask-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ask-chip { all: unset; cursor: pointer; font-size: 11.5px; font-family: var(--font-body); padding: 5px 10px; border-radius: 20px; border: 1px solid var(--line); color: var(--muted); }
+.ask-chip:hover { color: var(--text); border-color: var(--accent); }
+.ask-row { display: flex; gap: 8px; }
+.ask-row input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 8px 10px; font-family: var(--font-body); font-size: 13px; }
+.ask-feed { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.ask-turn .q { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.ask-turn .a { color: var(--muted); font-size: 13px; line-height: 1.55; background: var(--panel-2); border-radius: 6px; padding: 9px 11px; }
 
 .jc-box { border: 1px solid rgba(91,141,239,.35); background: rgba(91,141,239,.06); border-radius: 8px; padding: 14px; }
 .jc-box h3 { margin: 0 0 8px; font-family: var(--font-head); font-size: 13px; }
@@ -1052,6 +1069,66 @@ function renderAccounts() {
   return wrap;
 }
 
+// ---------------------------------------------------------------------------
+// "Ask about this account" — a deterministic Q&A over data this pipeline
+// already computed for the account. This is pattern-matching over already-
+// real data, not a new model call — it never invents a fact that isn't
+// already in the account record. If the viewer has activated live Claude
+// reasoning for this account (see the panel below), answers about "why now"
+// / "pain hypothesis" reflect that live output instead of the simulator,
+// same as everywhere else in this page.
+// ---------------------------------------------------------------------------
+const SUGGESTED_QUESTIONS = [
+  "Why is this account prioritized?",
+  "Why now?",
+  "What tools can the agent use here?",
+  "What would move this to Tier A?",
+  "What's the biggest risk of being wrong here?"
+];
+
+function nextTierHint(a) {
+  if (a.score.tier === "A") return "Already Tier A — nothing further needed to clear the routing gate.";
+  const gaps = a.score.score_explanation.filter(n => n.startsWith("+0"));
+  if (gaps.length === 0) return "No scoring gaps left to close — the remaining points would come from a policy change (see ICP Config), not new evidence.";
+  const nextTier = a.score.tier === "B" ? "A" : "B";
+  const target = nextTier === "A" ? ICP_CONFIG.tierA_threshold : ICP_CONFIG.tierB_threshold;
+  const pointsNeeded = target - a.score.total_score;
+  const prefix = a.score.tier === "C" ? `This account isn't Tier A material yet — it would need to clear Tier B first. ` : "";
+  return `${prefix}${pointsNeeded} more point${pointsNeeded === 1 ? "" : "s"} would reach Tier ${nextTier} (score ${a.score.total_score} → ${target}). Open gaps today: ${gaps.slice(0, 3).map(g => g.replace(/^\+0\s*/, "")).join("; ")}.`;
+}
+
+function answerAgentQuestion(c, a, q, reasoning) {
+  const ql = q.toLowerCase();
+  if (/why.*(priorit|account\??$)|priorit/.test(ql)) {
+    return `Score ${a.score.total_score}/100 (Tier ${a.score.tier}) — deterministic, from company fit (${a.score.company_fit_score}/40) + buying signals (${a.score.signal_score}/40) + contact quality (${a.score.contact_score}/20). See Score breakdown for the full line-by-line math.`;
+  }
+  if (/why now|timing/.test(ql)) {
+    return a.score.tier === "C" ? "No timing signal strong enough to act on yet — this account didn't clear the qualification gate, so no reasoning step ran on it." : reasoning.reason_to_contact_now;
+  }
+  if (/tool|access|permission|mcp/.test(ql)) {
+    return `This account can only be touched through the documented MCP surface: search_account, get_account_score, qualify_account and list_high_priority_accounts are READ ONLY. The one write tool, route_account, requires human approval before it fires — it cannot set a routing action inconsistent with this account's actual score. Full contract is in Architecture → MCP tool surface.`;
+  }
+  if (/tier a|move.*tier|what would|improve|threshold/.test(ql)) {
+    return nextTierHint(a);
+  }
+  if (/risk|wrong|fail|confidence/.test(ql)) {
+    const staleSignal = a.signals.find(s => s.detected && s.freshness_days > 30);
+    const base = `AI confidence on this account: ${reasoning.confidence}. `;
+    return base + (staleSignal
+      ? `Biggest concrete risk: the "${staleSignal.signal_name}" signal is ${staleSignal.freshness_days} days old — it could be stale by the time a seller acts on it. This demo re-enriches on a snapshot basis, not continuously.`
+      : `Biggest general risk for this system: unsupported personalization — outreach claiming something the evidence doesn't support. That's exactly what the QA check below exists to catch before anything is shown.`);
+  }
+  if (/person|contact|who/.test(ql)) {
+    return a.persona.contact_name !== "unknown"
+      ? `${a.persona.contact_name}, ${a.persona.contact_title} — ${a.persona.reason_persona_is_relevant}`
+      : `No confirmed contact yet. Recommended persona: ${a.persona.persona} — ${a.persona.reason_persona_is_relevant}`;
+  }
+  if (/route|bdr|crm|approv/.test(ql)) {
+    return `${a.routing.action} — ${a.routing.reason} Any CRM write or outreach send from here still requires a human to click through the Live Orchestration panel; nothing fires automatically.`;
+  }
+  return `Not sure how to answer that one from this account's data. Try: ${SUGGESTED_QUESTIONS.filter(s => s.toLowerCase() !== ql).slice(0, 3).join(" / ")}`;
+}
+
 /* ------------------------------------------------------------ ACCOUNT DETAIL */
 function renderAccountDetail(id) {
   const c = COMPANIES.find(x => x.id === id);
@@ -1103,6 +1180,20 @@ function renderAccountDetail(id) {
               <div class="detail${s.failed ? ' fail' : ''}">${esc(s.detail)}</div>
             </div>
           </div>`).join("")}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Ask about this account</h2><span class="hint">answers come from this account's own data, not a new model call</span></div>
+      <div class="body-pad">
+        <div class="ask-chip-row" id="ask-chips">
+          ${SUGGESTED_QUESTIONS.map(q => `<button class="ask-chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}
+        </div>
+        <div class="ask-feed" id="ask-feed"></div>
+        <div class="ask-row">
+          <input type="text" id="ask-input" placeholder="Ask why this account is prioritized, what tools it can use, what would change the tier..." />
+          <button class="btn small primary" id="ask-btn">Ask</button>
+        </div>
       </div>
     </div>
 
@@ -1360,6 +1451,18 @@ function renderAccountDetail(id) {
     });
   }
 
+  const askFeed = wrap.querySelector("#ask-feed");
+  const askInput = wrap.querySelector("#ask-input");
+  function askQuestion(q) {
+    if (!q.trim()) return;
+    const turn = el(`<div class="ask-turn"><div class="q">${esc(q)}</div><div class="a">${esc(answerAgentQuestion(c, a, q, r))}</div></div>`);
+    askFeed.appendChild(turn);
+    askInput.value = "";
+  }
+  wrap.querySelector("#ask-btn").addEventListener("click", () => askQuestion(askInput.value));
+  askInput.addEventListener("keydown", (e) => { if (e.key === "Enter") askQuestion(askInput.value); });
+  wrap.querySelectorAll("#ask-chips .ask-chip").forEach(chip => chip.addEventListener("click", () => askQuestion(chip.dataset.q)));
+
   return wrap;
 }
 function renderInference(text) {
@@ -1489,6 +1592,30 @@ function renderOutcomes() {
         ${fieldRow("Tier B accounts one verified contact away from Tier A", `${tierB.length} (see ICP Config to test lowering the threshold instead)`)}
       </div>
     </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Operating this system</h2><span class="hint">the questions an operator, not just a builder, has to answer</span></div>
+      <div class="body-pad">
+        <div class="ops-criteria-grid">
+          <div class="dt-card">
+            <div class="k">Primary failure mode</div>
+            <div class="v">A detected signal goes stale between enrichment and outreach (a job posting closes, a hiring push ends) but the account isn't re-enriched, so the message cites evidence that's no longer true. This demo re-enriches on a snapshot basis, not continuously — see each signal's freshness in Signals.</div>
+          </div>
+          <div class="dt-card">
+            <div class="k">Metric to own</div>
+            <div class="v">BDR routing rate (Tier A routed / total evaluated) — not accounts touched or emails drafted. Optimizing for volume of AI output instead of this number is exactly how a system like this stops being trustworthy.</div>
+          </div>
+          <div class="dt-card">
+            <div class="k">Write boundary</div>
+            <div class="v">No autonomous outreach send or CRM write, ever — and never below Tier A + sufficient evidence + a known contact. See Autonomy levels in Architecture for the full breakdown.</div>
+          </div>
+          <div class="dt-card">
+            <div class="k">Iteration loop</div>
+            <div class="v">Reply → stop automation, BDR takes over. Meeting booked → suppress remaining outreach. No response → pause until a new signal appears. Not interested → suppress. These rules are already encoded in each Tier A account's sequence — the loop closes there, not in a separate analytics step.</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>`);
   return wrap;
 }
@@ -1582,6 +1709,20 @@ function renderArchitecture() {
 
     <div class="panel">
       <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2></div>
+      <div class="pill-flow">
+        <span class="pf-step engine">Enrich</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Signals</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Score</span><span class="pf-arrow">→</span>
+        <span class="pf-step gate">Gate</span><span class="pf-arrow">→</span>
+        <span class="pf-step agent">Reason</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Persona</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Personalize</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">QA</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Sequence</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Route</span><span class="pf-arrow">→</span>
+        <span class="pf-step gate">Human approval</span><span class="pf-arrow">→</span>
+        <span class="pf-step engine">Learn</span>
+      </div>
       <div class="arch-flow"><span class="node">SOURCE — target account (CSV / form / API)</span>
   <span class="arrow">↓</span>
 <span class="node">ENRICH — company data (Clay)</span>
