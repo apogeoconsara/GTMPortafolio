@@ -311,6 +311,12 @@ tbody tr:hover { background: var(--panel-2); }
 .mini-flow .mf-arrow { color: var(--muted); font-size: 14px; }
 .tech-ref { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--muted); line-height: 1.9; }
 .tech-ref .k { color: var(--accent); font-weight: 600; }
+.compare-table td, .compare-table th { vertical-align: top; }
+.compare-table td:first-child { font-weight: 700; white-space: nowrap; }
+.compare-table td:not(:first-child) { color: var(--muted); line-height: 1.5; }
+.compare-table .live-dot, .compare-table .design-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
+.compare-table .live-dot { background: var(--good); }
+.compare-table .design-dot { background: var(--line); border: 1px solid var(--muted); }
 .pill-flow .pf-arrow { color: var(--muted); font-size: 12px; }
 .decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
@@ -1830,33 +1836,53 @@ function renderArchitecture() {
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Current prototype vs. production integration design</h2></div>
-      <div class="stack-cols body-pad">
-        <div class="stack-col">
-          <h3>Current prototype</h3>
-          <div class="stack-note">Everything below is either running live in this build, or was actually executed once to build the dataset it runs on.</div>
-          <ul>
-            <li><span class="live-dot"></span>Clay — real enrichment, executed live for all 15 accounts (find-and-enrich-company + contact search, including verified emails for the 3 Tier A accounts), snapshotted into this static build rather than called per pageview</li>
-            <li><span class="live-dot"></span>JavaScript signal engine — live in this build</li>
-            <li><span class="live-dot"></span>Deterministic ICP scoring — live, configurable in ICP Config</li>
-            <li><span class="live-dot"></span>Structured AI-response simulator — live (optionally swappable for a real Claude call per account, see below)</li>
-            <li><span class="live-dot"></span>Routing engine — live, rule-based</li>
-            <li><span class="live-dot"></span>Zapier webhook + HubSpot CRM write — real, two paths: a viewer's own credentials via the "Live orchestration" panel, or the site owner's credentials via a Netlify Function (<span class="tag">/.netlify/functions/route-to-bdr</span>) that only accepts the 3 accounts that actually clear the Tier A + evidence + contact gate</li>
-            <li><span class="live-dot"></span>Static deployment (Netlify) — live</li>
-          </ul>
-        </div>
-        <div class="stack-col">
-          <h3>Production integration design</h3>
-          <div class="stack-note">Designed and mapped to the pipeline above — genuinely not built or connected, unlike the items on the left.</div>
-          <ul>
-            <li><span class="design-dot"></span>Clay → ongoing enrichment via webhook, instead of a one-time snapshot</li>
-            <li><span class="design-dot"></span>Claude API → research / reasoning / personalization, called server-side instead of viewer-supplied</li>
-            <li><span class="design-dot"></span>Salesforce → CRM system of record (this demo's CRM write targets HubSpot instead, since it's free to test)</li>
-            <li><span class="design-dot"></span>Marketo → nurture</li>
-            <li><span class="design-dot"></span>Gong Engage → sequencing</li>
-            <li><span class="design-dot"></span>Rate limiting / abuse protection on the backend function beyond the account allowlist it already enforces</li>
-          </ul>
-        </div>
+      <div class="panel-head"><h2>Current prototype vs. production integration design</h2><span class="hint">🟢 real today &nbsp; ⚪ designed, not built</span></div>
+      <div class="body-pad" style="overflow-x:auto">
+        <table class="compare-table">
+          <thead><tr><th>Component</th><th>Today (this demo)</th><th>Production equivalent</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Enrichment</td>
+              <td><span class="live-dot"></span>Clay, a real one-time snapshot across all 15 accounts</td>
+              <td><span class="design-dot"></span>Clay via webhook, refreshed continuously instead of once</td>
+            </tr>
+            <tr>
+              <td>Signals &amp; scoring</td>
+              <td><span class="live-dot"></span>Deterministic engine, fully live</td>
+              <td><span class="live-dot"></span>Same code — nothing to change for production</td>
+            </tr>
+            <tr>
+              <td>AI reasoning</td>
+              <td><span class="live-dot"></span>Real Claude API call, optional per account with your own key</td>
+              <td><span class="design-dot"></span>Same Claude call, made server-side by default instead of viewer-supplied</td>
+            </tr>
+            <tr>
+              <td>Routing</td>
+              <td><span class="live-dot"></span>Deterministic rules, fully live</td>
+              <td><span class="live-dot"></span>Same code — nothing to change for production</td>
+            </tr>
+            <tr>
+              <td>Sequencing &amp; nurture</td>
+              <td><span class="live-dot"></span>Built-in demo sequence, Tier A accounts only</td>
+              <td><span class="design-dot"></span>Gong Engage for sequencing, Marketo for nurture</td>
+            </tr>
+            <tr>
+              <td>CRM &amp; orchestration</td>
+              <td><span class="live-dot"></span>Real Zapier webhook + real HubSpot write (your credentials, or the site's via <span class="tag">/.netlify/functions/route-to-bdr</span>)</td>
+              <td><span class="design-dot"></span>Salesforce as system of record, credentials held server-side only</td>
+            </tr>
+            <tr>
+              <td>Deployment</td>
+              <td><span class="live-dot"></span>Static site on Netlify</td>
+              <td><span class="design-dot"></span>Same, likely behind a full app server</td>
+            </tr>
+            <tr>
+              <td>Abuse protection</td>
+              <td><span class="live-dot"></span>Account allowlist on the one backend function</td>
+              <td><span class="design-dot"></span>Rate limiting, auth, and monitoring on top of that</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
