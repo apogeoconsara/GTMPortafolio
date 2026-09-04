@@ -291,6 +291,26 @@ tbody tr:hover { background: var(--panel-2); }
 .pill-flow .pf-step.engine { background: rgba(100,116,139,.2); color: var(--muted); }
 .pill-flow .pf-step.agent { background: rgba(180,83,9,.18); color: var(--warn); }
 .pill-flow .pf-step.gate { background: rgba(14,143,118,.16); color: var(--accent); }
+
+/* --- System at a glance --- */
+.glance-row { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; padding: 4px 4px 6px; }
+.glance-card { flex: 1 1 160px; min-width: 160px; border-radius: 10px; padding: 16px 14px; border: 1px solid var(--line); }
+.glance-card .emoji { font-size: 22px; margin-bottom: 8px; display: block; }
+.glance-card h4 { margin: 0 0 6px; font-family: var(--font-head); font-size: 14px; font-weight: 700; }
+.glance-card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.glance-card.data { background: #F1F3F5; border-color: var(--line); }
+.glance-card.engine { background: #F1F3F5; border-color: var(--line); }
+.glance-card.agent { background: #FFF8F0; border-color: rgba(180,83,9,.25); }
+.glance-card.human { background: var(--accent-dim); border-color: rgba(14,143,118,.3); }
+.glance-card.out { background: #F1F3F5; border-color: var(--line); }
+.glance-arrow { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 20px; flex: 0 0 auto; padding: 0 2px; }
+@media (max-width: 900px) { .glance-arrow { transform: rotate(90deg); } }
+
+.mini-flow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 14px 4px; }
+.mini-flow .mf-node { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 600; }
+.mini-flow .mf-arrow { color: var(--muted); font-size: 14px; }
+.tech-ref { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--muted); line-height: 1.9; }
+.tech-ref .k { color: var(--accent); font-weight: 600; }
 .pill-flow .pf-arrow { color: var(--muted); font-size: 12px; }
 .decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
@@ -1746,7 +1766,24 @@ function renderArchitecture() {
     <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its enrichment is a real one-time Clay run against real companies, and a viewer can opt into a real Claude reasoning call and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2></div>
+      <div class="panel-head"><h2>The system, in one glance</h2><span class="hint">read left to right — this is the whole idea</span></div>
+      <div class="body-pad">
+        <div class="glance-row">
+          <div class="glance-card data"><span class="emoji">📥</span><h4>Real data in</h4><p>Clay pulls real firmographic and hiring data for each company — a one-time snapshot in this demo, a live feed in production.</p></div>
+          <div class="glance-arrow">→</div>
+          <div class="glance-card engine"><span class="emoji">⚙️</span><h4>Deterministic engine</h4><p>Fixed rules turn that data into buying signals, a 0–100 score, and a tier. Reproducible, no AI involved, no randomness.</p></div>
+          <div class="glance-arrow">→</div>
+          <div class="glance-card agent"><span class="emoji">🤖</span><h4>Controlled AI</h4><p>Only accounts that clear the score bar get an AI-written pain hypothesis. The model never sets the score or decides routing.</p></div>
+          <div class="glance-arrow">→</div>
+          <div class="glance-card human"><span class="emoji">🧍</span><h4>Human checkpoint</h4><p>Nothing leaves the system — no email, no CRM write — without a person clicking approve first.</p></div>
+          <div class="glance-arrow">→</div>
+          <div class="glance-card out"><span class="emoji">📤</span><h4>Where it goes</h4><p>A real Zapier webhook and a real HubSpot write in this demo; Salesforce, Marketo and Gong Engage in a production build.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2><span class="hint">the same 5 stages above, broken into every actual step</span></div>
       <div class="pill-flow">
         <span class="pf-step engine">Enrich</span><span class="pf-arrow">→</span>
         <span class="pf-step engine">Signals</span><span class="pf-arrow">→</span>
@@ -1773,13 +1810,22 @@ function renderArchitecture() {
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Where Zapier / webhooks participate (production design)</h2></div>
-      <div class="body-pad" style="font-size:13.5px;color:var(--muted)">
-        Clay's table finishes an enrichment run and posts to <span class="tag">POST /api/webhook/clay</span>.
-        That triggers qualification (<span class="tag">POST /api/qualify</span>) automatically — no manual step.
-        Zapier sits alongside this as an optional layer for teams that want a no-code trigger between Clay,
-        the qualification API, and the CRM instead of native webhooks. None of this is live in the static demo —
-        see the stack breakdown below for what is actually running versus designed.
+      <div class="panel-head"><h2>How this would connect in production</h2></div>
+      <div class="body-pad">
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">In a live build, the moment Clay finishes enriching a company, that automatically kicks off qualification — no one has to click a button. Zapier is an optional no-code layer for teams who'd rather configure that hand-off visually instead of writing the connecting code themselves.</p>
+        <div class="mini-flow">
+          <div class="mf-node">Clay finishes enrichment</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Auto-triggers qualification</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Score + AI reasoning</div><div class="mf-arrow">→</div>
+          <div class="mf-node">CRM + Zapier</div>
+        </div>
+        <div class="tech-ref">
+          <span class="k">For developers</span> — the API surface this maps to (designed, not live in this static demo):<br>
+          POST /api/webhook/clay — receive Clay enrichment, auto-trigger qualification<br>
+          POST /api/qualify — run enrichment → signals → score → AI reasoning<br>
+          POST /api/accounts — create a target account &nbsp;·&nbsp; GET /api/accounts — list with scores &nbsp;·&nbsp; GET /api/accounts/:id — full record<br>
+          POST /api/accounts/:id/route — re-run the routing decision
+        </div>
       </div>
     </div>
 
@@ -1824,18 +1870,6 @@ function renderArchitecture() {
         The same account detail page also has a "Live orchestration &amp; CRM sync" panel — paste your own Zapier catch-hook URL and/or
         HubSpot private-app token and the "Route to BDR"-style actions actually fire: a real webhook delivery, a real Contact + Deal
         created in your HubSpot portal. Both are gated behind you supplying your own credentials, the same trust model as the Claude key.
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h2>API surface (designed, not live in this static demo)</h2></div>
-      <div class="body-pad" style="font-family:var(--font-mono);font-size:12.5px;color:var(--muted);line-height:2">
-        POST /api/accounts &nbsp;— create a target account<br>
-        POST /api/qualify &nbsp;— run enrichment → signals → score → AI reasoning<br>
-        POST /api/webhook/clay &nbsp;— receive Clay enrichment, auto-trigger qualification<br>
-        GET /api/accounts &nbsp;— list accounts with scores<br>
-        GET /api/accounts/:id &nbsp;— full auditable record<br>
-        POST /api/accounts/:id/route &nbsp;— re-run routing decision
       </div>
     </div>
 
