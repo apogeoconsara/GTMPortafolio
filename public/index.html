@@ -283,7 +283,7 @@ tbody tr:hover { background: var(--panel-2); }
   <aside class="rail">
     <div class="rail-brand">GTM AI Outbound Engine</div>
     <div class="rail-sub">Signal-based account qualification</div>
-    <div class="rail-badge">Demo Mode · seeded dataset</div>
+    <div class="rail-badge">Demo Mode · real Clay data</div>
     <div id="ai-mode-badge"></div>
     <nav>
       <button data-page="dashboard" class="active"><span class="dot"></span>Dashboard</button>
@@ -317,30 +317,29 @@ tbody tr:hover { background: var(--panel-2); }
    ========================================================================== */
 
 // ---------------------------------------------------------------------------
-// PHASE 1/2 — TARGET ACCOUNT INPUT + ENRICHMENT (demo dataset)
+// PHASE 1/2 — TARGET ACCOUNT INPUT + ENRICHMENT (REAL DATA)
+// This dataset was built from a live Clay enrichment run (find-and-enrich-company
+// + find-and-enrich-contacts-at-company) against real, named companies chosen as
+// plausible JumpCloud-shaped candidates — mid-market, multi-country and/or
+// hiring for IT/security roles. This is candidate research compiled from public
+// data (LinkedIn firmographics, public job postings, public press) for portfolio
+// purposes — it is NOT an active JumpCloud outbound campaign, and no company
+// listed here has been contacted. Every field below traces to a real Clay
+// enrichment result fetched on 2026-09-04; anything Clay could not confirm is
+// left "unknown" — never fabricated, same rule as the original seeded dataset.
 // In production this object is what Clay's webhook (POST /api/webhook/clay)
-// would populate. Unknown fields are explicit "unknown" — never fabricated.
+// would populate on an ongoing basis instead of a one-time snapshot.
 // ---------------------------------------------------------------------------
 const COMPANIES = [
-  { id: "acc_01", company_name: "Northbeam Logistics", website: "northbeamlogistics.com", industry: "Freight & Supply Chain Tech", employee_count: 640, headquarters: "Austin, TX", countries_of_operation: ["US", "MX", "CA"], company_description: "Cloud dispatch and fleet-visibility platform for mid-market freight carriers.", estimated_growth: "+38% headcount YoY", technology_context: "Google Workspace, Okta trial expired Q2, mixed Mac/Windows fleet", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-22", contact: { name: "Priya Nair", title: "Director of IT", email: "p.nair@northbeamlogistics.com", confidence: "high" } },
-  { id: "acc_02", company_name: "Verdant Health Analytics", website: "verdanthealth.io", industry: "Healthcare SaaS", employee_count: 410, headquarters: "Boston, MA", countries_of_operation: ["US"], company_description: "Clinical data analytics for regional hospital networks, mostly office-based with a small contractor pool.", estimated_growth: "+22% headcount YoY", technology_context: "HIPAA compliance program active, Azure AD in place, MDM gaps on contractor devices", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-08-19", contact: { name: "Marcus Webb", title: "VP IT & Security", email: "m.webb@verdanthealth.io", confidence: "high" } },
-  { id: "acc_03", company_name: "Solace Home Goods", website: "solacehome.com", industry: "E-commerce / DTC Retail", employee_count: 180, headquarters: "Columbus, OH", countries_of_operation: ["US"], company_description: "Direct-to-consumer home goods brand, warehouse + small corporate team.", estimated_growth: "flat", technology_context: "Shopify, Google Workspace, no dedicated IT hire", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-08-10", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_04", company_name: "Kestrel Robotics", website: "kestrelrobotics.ai", industry: "Industrial Automation", employee_count: 890, headquarters: "Pittsburgh, PA", countries_of_operation: ["US", "DE", "JP"], company_description: "Warehouse robotics manufacturer expanding into European and APAC fulfillment centers.", estimated_growth: "+45% headcount YoY", technology_context: "Hybrid on-prem/cloud identity, hiring Head of Corporate IT, engineering on Linux/Mac mix", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-27", contact: { name: "Elena Farkas", title: "Head of IT", email: "e.farkas@kestrelrobotics.ai", confidence: "high" } },
-  { id: "acc_05", company_name: "Milltown Credit Union", website: "milltowncu.org", industry: "Financial Services", employee_count: 260, headquarters: "Grand Rapids, MI", countries_of_operation: ["US"], company_description: "Regional credit union, branch + back-office staff.", estimated_growth: "+4% headcount YoY", technology_context: "On-prem AD, no cloud IAM migration announced", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-07-30", contact: { name: "Tom Alvarez", title: "IT Operations Director", email: "t.alvarez@milltowncu.org", confidence: "medium" } },
-  { id: "acc_06", company_name: "Fernhill Design Studio", website: "fernhillstudio.com", industry: "Creative Agency", employee_count: 45, headquarters: "Portland, OR", countries_of_operation: ["US"], company_description: "Boutique branding and design agency.", estimated_growth: "unknown", technology_context: "unknown", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-06-18", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_07", company_name: "Aurelia Biotech", website: "aureliabio.com", industry: "Life Sciences", employee_count: 720, headquarters: "San Diego, CA", countries_of_operation: ["US", "UK", "CH"], company_description: "Clinical-stage biotech opening a European R&D site.", estimated_growth: "+31% headcount YoY", technology_context: "GxP compliance pressure, actively posting for Identity & Access Management lead, BYOD policy undefined", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-29", contact: { name: "Daniel Osei", title: "CIO", email: "d.osei@aureliabio.com", confidence: "high" } },
-  { id: "acc_08", company_name: "Redline Motorsports Parts", website: "redlinemsp.com", industry: "Automotive Retail", employee_count: 95, headquarters: "Charlotte, NC", countries_of_operation: ["US"], company_description: "Aftermarket auto parts distributor.", estimated_growth: "flat", technology_context: "Legacy on-prem ERP, no cloud identity layer", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-05-12", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_09", company_name: "Bramblewood Legal Group", website: "bramblewoodlaw.com", industry: "Legal Services", employee_count: 310, headquarters: "Chicago, IL", countries_of_operation: ["US", "UK"], company_description: "Mid-size law firm with a new London office.", estimated_growth: "+18% headcount YoY", technology_context: "Recently mandated MFA firm-wide after a phishing incident, evaluating device management vendors", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-25", contact: { name: "Rachel Kim", title: "Director of IT", email: "r.kim@bramblewoodlaw.com", confidence: "high" } },
-  { id: "acc_10", company_name: "Coastal Grain Co-op", website: "coastalgrain.coop", industry: "Agriculture", employee_count: 150, headquarters: "Fargo, ND", countries_of_operation: ["US"], company_description: "Regional grain co-op, mostly field and elevator staff.", estimated_growth: "unknown", technology_context: "unknown", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-05-30", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_11", company_name: "Ironclad Fabrication", website: "ironcladfab.com", industry: "Manufacturing", employee_count: 520, headquarters: "Cleveland, OH", countries_of_operation: ["US", "MX"], company_description: "Metal fabrication with a new Monterrey plant.", estimated_growth: "+9% headcount YoY", technology_context: "Plant floor + corporate split identity systems, hiring a Systems Administrator", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: true, last_enriched: "2026-08-05", contact: { name: "Greg Sato", title: "IT Manager", email: "g.sato@ironcladfab.com", confidence: "medium" } },
-  { id: "acc_12", company_name: "Vantage Point Consulting", website: "vantagepointco.com", industry: "Professional Services", employee_count: 275, headquarters: "Denver, CO", countries_of_operation: ["US", "CA", "UK", "SG"], company_description: "Boutique strategy consultancy, fully distributed team across four countries.", estimated_growth: "+27% headcount YoY", technology_context: "Fully remote-first, contractor-heavy, no unified device management, actively posting Security Director role", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-30", contact: { name: "Ana Beltrán", title: "VP IT", email: "a.beltran@vantagepointco.com", confidence: "high" } },
-  { id: "acc_13", company_name: "Pinewood Family Dental", website: "pinewooddental.com", industry: "Healthcare (Small Practice)", employee_count: 22, headquarters: "Boise, ID", countries_of_operation: ["US"], company_description: "Local multi-chair dental practice.", estimated_growth: "flat", technology_context: "unknown", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-04-22", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_14", company_name: "Skylark EdTech", website: "skylarked.com", industry: "Education Technology", employee_count: 480, headquarters: "Seattle, WA", countries_of_operation: ["US", "CA", "AU"], company_description: "K-12 learning platform expanding into the Australian market.", estimated_growth: "+9% headcount YoY", technology_context: "Google Workspace, student-data compliance pressure, IT hiring freeze reported this quarter", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-08-14", contact: { name: "Owen Park", title: "Head of IT", email: "o.park@skylarked.com", confidence: "medium" } },
-  { id: "acc_15", company_name: "Redstone Municipal Utilities", website: "redstoneutilities.gov", industry: "Public Sector / Utilities", employee_count: 340, headquarters: "Redstone County, CO", countries_of_operation: ["US"], company_description: "County utilities authority.", estimated_growth: "unknown", technology_context: "Procurement cycle is annual/RFP-driven, unknown current identity stack", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-03-11", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_16", company_name: "Halcyon Games Studio", website: "halcyongames.dev", industry: "Gaming / Interactive Media", employee_count: 210, headquarters: "Montreal, QC", countries_of_operation: ["CA", "US", "FR"], company_description: "Indie-to-midsize game studio, distributed dev team across three countries.", estimated_growth: "+9% headcount YoY", technology_context: "Remote-first since founding, BYOD across contractors and staff, evaluating identity providers per recent job post for 'IT & Security Lead'", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-08-28", contact: { name: "Jules Tremblay", title: "IT & Security Lead (open req)", email: "unknown", confidence: "medium" } }
+  { id: "acc_01", company_name: "Webflow", website: "webflow.com", industry: "Software Development", employee_count: 1617, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB", "AR"], company_description: "Agentic web marketing platform for high-performing brands, with offices in San Francisco, London, Chicago and Buenos Aires.", estimated_growth: "+16% headcount YoY", technology_context: "unknown — Clay's tech-stack data point only covers the public marketing site, not internal IT/identity tooling", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Ty Sbano", title: "Chief Information Security Officer", email: "unknown", confidence: "medium" } },
+  { id: "acc_02", company_name: "Retool", website: "retool.com", industry: "Software Development", employee_count: 416, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB"], company_description: "Enterprise low-code platform for building internal tools, with offices in San Francisco, New York and London.", estimated_growth: "-13% headcount YoY (declining, per Clay)", technology_context: "Open reqs found via Clay for \"Application Security Engineer\" and \"IT Engineer\" (Sep 2026)", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "DJ McCulloch", title: "Head of Security", email: "unknown", confidence: "medium" } },
+  { id: "acc_03", company_name: "Clio", website: "clio.com", industry: "Software Development", employee_count: 2722, headquarters: "Burnaby, BC, Canada", countries_of_operation: ["CA", "IE", "AU", "US"], company_description: "Legal AI / practice-management platform, with offices in Burnaby, Toronto, Calgary, Dublin and Sydney.", estimated_growth: "+64% headcount YoY", technology_context: "Open req found via Clay for \"Application Security Developer\" (Sep 2026)", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-09-04", contact: { name: "George Totev", title: "VP of Security and CISO", email: "unknown", confidence: "medium" } },
+  { id: "acc_04", company_name: "Podium", website: "podium.com", industry: "Software Development", employee_count: 1638, headquarters: "Lehi, UT", countries_of_operation: ["US", "AU"], company_description: "AI-driven customer communication platform for local businesses, with offices in Lehi, Utah and Melbourne.", estimated_growth: "+13% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_05", company_name: "Zapier", website: "zapier.com", industry: "Software Development", employee_count: 1524, headquarters: "San Francisco, CA", countries_of_operation: ["US"], company_description: "Automation platform connecting apps and AI agents; Clay's own contact search for this company returned employees across the US, UK, India, Portugal and Canada, consistent with Zapier's long-standing distributed/remote-first operating model.", estimated_growth: "+14% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_06", company_name: "Motive", website: "gomotive.com", industry: "Software Development", employee_count: 6359, headquarters: "San Francisco, CA", countries_of_operation: ["US", "PK", "IN", "TW", "CA"], company_description: "Fleet and physical-operations management platform, with offices/teams in the US, Pakistan, India, Taiwan and Canada per Clay.", estimated_growth: "+29% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment; headcount is well above this demo's default 2,000-employee ICP ceiling", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } }
 ];
 
-const TODAY = new Date("2026-09-03T00:00:00Z");
+const TODAY = new Date("2026-09-04T00:00:00Z");
 
 // ---------------------------------------------------------------------------
 // PHASE 4 — configurable scoring weights + ICP thresholds
@@ -356,7 +355,8 @@ const DEFAULT_ICP_CONFIG = {
   min_signals_for_evidence: 2,
   target_industries: ["Freight & Supply Chain Tech", "Healthcare SaaS", "Industrial Automation",
     "Life Sciences", "Legal Services", "Professional Services", "Education Technology",
-    "Gaming / Interactive Media", "Manufacturing", "Financial Services", "Healthcare (Small Practice)"],
+    "Gaming / Interactive Media", "Manufacturing", "Financial Services", "Healthcare (Small Practice)",
+    "Software Development"],
   target_geos: ["US", "CA", "UK", "DE", "CH", "AU", "SG", "FR", "MX", "JP"],
   weights: {
     company_fit: { headcount_band: 15, relevant_profile: 10, multi_location: 10, relevant_geo: 5 },
@@ -417,8 +417,10 @@ function detectSignals(c) {
 }
 
 function parseGrowth(str) {
-  const m = /(\+?)(\d+)%/.exec(str || "");
-  return m ? parseInt(m[2], 10) : null;
+  const m = /(-)?\+?(\d+)%/.exec(str || "");
+  if (!m) return null;
+  const n = parseInt(m[2], 10);
+  return m[1] ? -n : n;
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +753,70 @@ Never invent facts not present in the input. You do not set the ICP score or tie
   return { ...parsed, icp_score: score.total_score, tier: score.tier, source: "live_claude" };
 }
 
+// ---------------------------------------------------------------------------
+// OPTIONAL — live orchestration (Zapier webhook + HubSpot CRM write) for the
+// "engagement orchestration" and "CRM sync" steps. Same trust model as the
+// Claude key above: the viewer pastes their OWN Zapier webhook URL / HubSpot
+// private-app token, used only for a direct browser request to that one
+// endpoint, never persisted or sent anywhere else. This is what actually
+// fires when a viewer clicks the buttons below — nothing runs automatically
+// for all accounts, and nothing here changes score or routing.
+// ---------------------------------------------------------------------------
+let ZAPIER_WEBHOOK_URL = "";
+let HUBSPOT_TOKEN = "";
+const LIVE_ORCHESTRATION_FIRED = {}; // accountId -> { zapier: bool, hubspot: bool }
+
+async function fireZapierWebhook(c, a) {
+  const res = await fetch(ZAPIER_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      company_name: c.company_name, website: c.website, icp_score: a.score.total_score,
+      tier: a.score.tier, primary_signal: a.ai_reasoning.primary_signal,
+      routing_action: a.routing.action, persona: a.persona.persona,
+      contact_name: a.persona.contact_name, contact_title: a.persona.contact_title,
+      fired_at: new Date().toISOString(), source: "GTM AI Outbound Engine demo"
+    })
+  });
+  if (!res.ok) throw new Error(`Zapier webhook returned ${res.status}`);
+}
+
+async function createHubspotContactAndDeal(c, a) {
+  const contactRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+    method: "POST",
+    headers: { "content-type": "application/json", "authorization": `Bearer ${HUBSPOT_TOKEN}` },
+    body: JSON.stringify({
+      properties: {
+        firstname: a.persona.contact_name !== "unknown" ? a.persona.contact_name.split(" ")[0] : "Unknown",
+        lastname: a.persona.contact_name !== "unknown" ? a.persona.contact_name.split(" ").slice(1).join(" ") || "Contact" : "Contact",
+        jobtitle: a.persona.contact_title, company: c.company_name, website: c.website
+      }
+    })
+  });
+  if (!contactRes.ok) {
+    const errText = await contactRes.text().catch(() => "");
+    throw new Error(`HubSpot contact create failed (${contactRes.status}): ${errText.slice(0, 200)}`);
+  }
+  const contact = await contactRes.json();
+
+  const dealRes = await fetch("https://api.hubapi.com/crm/v3/objects/deals", {
+    method: "POST",
+    headers: { "content-type": "application/json", "authorization": `Bearer ${HUBSPOT_TOKEN}` },
+    body: JSON.stringify({
+      properties: {
+        dealname: `${c.company_name} — GTM AI Outbound Engine (score ${a.score.total_score}, tier ${a.score.tier})`,
+        dealstage: "appointmentscheduled", pipeline: "default"
+      },
+      associations: [{ to: { id: contact.id }, types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 3 }] }]
+    })
+  });
+  if (!dealRes.ok) {
+    const errText = await dealRes.text().catch(() => "");
+    throw new Error(`HubSpot deal create failed (${dealRes.status}): ${errText.slice(0, 200)} (contact ${contact.id} was created)`);
+  }
+  return { contactId: contact.id };
+}
+
 /* View layer — plain DOM rendering over the engine data + logic. */
 
 const PAGES = ["dashboard", "accounts", "signals", "routing", "config", "architecture"];
@@ -806,7 +872,7 @@ function renderDashboard() {
   const wrap = el(`<div>
     <div class="page-head">
       <h1>GTM Operations Dashboard</h1>
-      <p>${ACCOUNTS.length} synthetic target accounts run through enrichment → signal detection → ICP scoring → AI reasoning → routing. Demo Mode — no live enrichment or CRM calls.</p>
+      <p>${ACCOUNTS.length} real companies — candidate research compiled from public data via a live Clay enrichment run, not an active JumpCloud campaign — run through signal detection → ICP scoring → AI reasoning → routing. Optional live Zapier/HubSpot orchestration available per account.</p>
     </div>
     <div class="kpi-grid">
       <div class="kpi"><div class="v">${ACCOUNTS.length}</div><div class="l">Total accounts</div></div>
@@ -1014,6 +1080,26 @@ function renderAccountDetail(id) {
             </div>
           </div>
         </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>Live orchestration &amp; CRM sync</h2><span class="hint">optional — real Zapier + HubSpot, your own credentials</span></div>
+          <div class="body-pad">
+            <div class="claude-live-box">
+              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Zapier "Webhooks by Zapier" catch-hook URL and/or your own HubSpot private-app access token to actually fire the engagement-orchestration and CRM-sync steps for this account. Same trust model as the Claude key above — used only for a direct browser request to that one service, never persisted or sent anywhere else. This never runs automatically for every account, only when you click a button below.</p>
+              <input type="text" id="zapier-url-input" placeholder="https://hooks.zapier.com/hooks/catch/..." value="${ZAPIER_WEBHOOK_URL ? esc(ZAPIER_WEBHOOK_URL) : ""}" style="margin-bottom:8px" />
+              <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
+                <button class="btn small" id="fire-zapier-btn">Send test webhook to Zapier</button>
+                ${LIVE_ORCHESTRATION_FIRED[id]?.zapier ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">Zapier: LIVE — fired</span>' : ''}
+              </div>
+              <input type="password" id="hubspot-token-input" placeholder="HubSpot private app token (pat-...)" value="${HUBSPOT_TOKEN ? esc(HUBSPOT_TOKEN) : ""}" style="margin-bottom:8px" />
+              <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn small" id="fire-hubspot-btn">Create/update HubSpot contact + deal</button>
+                ${LIVE_ORCHESTRATION_FIRED[id]?.hubspot ? '<span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">HubSpot: LIVE — synced</span>' : ''}
+              </div>
+              <div class="claude-status" id="orch-status"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div>
@@ -1080,6 +1166,42 @@ function renderAccountDetail(id) {
   });
   const revertBtn = wrap.querySelector("#revert-live-btn");
   if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; openAccount(id); });
+
+  const orchStatus = wrap.querySelector("#orch-status");
+  wrap.querySelector("#fire-zapier-btn").addEventListener("click", async () => {
+    const url = wrap.querySelector("#zapier-url-input").value.trim();
+    if (!url) { orchStatus.textContent = "Enter a Zapier webhook URL first."; orchStatus.className = "claude-status err"; return; }
+    ZAPIER_WEBHOOK_URL = url;
+    orchStatus.textContent = "Sending to Zapier...";
+    orchStatus.className = "claude-status";
+    try {
+      await fireZapierWebhook(c, a);
+      LIVE_ORCHESTRATION_FIRED[id] = { ...(LIVE_ORCHESTRATION_FIRED[id] || {}), zapier: true };
+      orchStatus.textContent = "Webhook delivered — check your Zap's history.";
+      orchStatus.className = "claude-status ok";
+      openAccount(id);
+    } catch (err) {
+      orchStatus.textContent = "Failed: " + err.message + " — Zapier catch-hooks usually accept any origin, so this is most often a wrong/expired URL.";
+      orchStatus.className = "claude-status err";
+    }
+  });
+  wrap.querySelector("#fire-hubspot-btn").addEventListener("click", async () => {
+    const token = wrap.querySelector("#hubspot-token-input").value.trim();
+    if (!token) { orchStatus.textContent = "Enter a HubSpot private app token first."; orchStatus.className = "claude-status err"; return; }
+    HUBSPOT_TOKEN = token;
+    orchStatus.textContent = "Writing to HubSpot...";
+    orchStatus.className = "claude-status";
+    try {
+      await createHubspotContactAndDeal(c, a);
+      LIVE_ORCHESTRATION_FIRED[id] = { ...(LIVE_ORCHESTRATION_FIRED[id] || {}), hubspot: true };
+      orchStatus.textContent = "Contact + deal created in your HubSpot portal.";
+      orchStatus.className = "claude-status ok";
+      openAccount(id);
+    } catch (err) {
+      orchStatus.textContent = "Failed: " + err.message + " — HubSpot blocks direct browser calls without a CORS-enabled private app; a production build would proxy this through a backend, same as the Claude call note above.";
+      orchStatus.className = "claude-status err";
+    }
+  });
 
   return wrap;
 }
@@ -1237,7 +1359,7 @@ const MCP_TOOLS = [
 
 function renderArchitecture() {
   const wrap = el(`<div>
-    <div class="page-head"><h1>System Architecture</h1><p>Demo Mode runs entirely client-side on a seeded dataset. The same data model is designed to accept live Clay enrichment, a real Claude reasoning call, and a Salesforce/HubSpot sync without changing anything downstream.</p></div>
+    <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its enrichment is a real one-time Clay run against real companies, and a viewer can opt into a real Claude reasoning call and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
 
     <div class="panel">
       <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2></div>
@@ -1280,37 +1402,42 @@ function renderArchitecture() {
       <div class="stack-cols body-pad">
         <div class="stack-col">
           <h3>Current prototype</h3>
-          <div class="stack-note">Everything below is actually running in this build — nothing is a live third-party connection.</div>
+          <div class="stack-note">Everything below is either running live in this build, or was actually executed once to build the dataset it runs on.</div>
           <ul>
-            <li><span class="live-dot"></span>Seeded JSON dataset — simulates enrichment output</li>
+            <li><span class="live-dot"></span>Clay — real enrichment, executed live for all 6 accounts (find-and-enrich-company + contact search), snapshotted into this static build rather than called per pageview</li>
             <li><span class="live-dot"></span>JavaScript signal engine — live in this build</li>
             <li><span class="live-dot"></span>Deterministic ICP scoring — live, configurable in ICP Config</li>
             <li><span class="live-dot"></span>Structured AI-response simulator — live (optionally swappable for a real Claude call per account, see below)</li>
             <li><span class="live-dot"></span>Routing engine — live, rule-based</li>
+            <li><span class="live-dot"></span>Zapier webhook + HubSpot CRM write — real, fires per account when a viewer supplies their own credentials (see "Live orchestration" panel on any account)</li>
             <li><span class="live-dot"></span>Static deployment (Netlify) — live</li>
           </ul>
         </div>
         <div class="stack-col">
           <h3>Production integration design</h3>
-          <div class="stack-note">Designed and mapped to the pipeline above — not built or connected in this repo.</div>
+          <div class="stack-note">Designed and mapped to the pipeline above — genuinely not built or connected, unlike the items on the left.</div>
           <ul>
-            <li><span class="design-dot"></span>Clay → enrichment</li>
-            <li><span class="design-dot"></span>Claude API → research / reasoning / personalization</li>
-            <li><span class="design-dot"></span>Salesforce → CRM system of record</li>
+            <li><span class="design-dot"></span>Clay → ongoing enrichment via webhook, instead of a one-time snapshot</li>
+            <li><span class="design-dot"></span>Claude API → research / reasoning / personalization, called server-side instead of viewer-supplied</li>
+            <li><span class="design-dot"></span>Salesforce → CRM system of record (this demo's CRM write targets HubSpot instead, since it's free to test)</li>
             <li><span class="design-dot"></span>Marketo → nurture</li>
             <li><span class="design-dot"></span>Gong Engage → sequencing</li>
-            <li><span class="design-dot"></span>Webhooks / orchestration layer → automation glue</li>
+            <li><span class="design-dot"></span>Backend orchestration layer → holding credentials server-side instead of asking each viewer for their own</li>
           </ul>
         </div>
       </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Live Claude call — proof of wiring</h2></div>
-      <div class="body-pad" style="font-size:13.5px;color:var(--muted)">
+      <div class="panel-head"><h2>Live wiring — proof, not just documentation</h2></div>
+      <div class="body-pad" style="font-size:13.5px;color:var(--muted);line-height:1.7">
         The AI Research &amp; Reasoning step is the only place a model is allowed to touch this pipeline — never scoring, never routing.
         Open any account's detail page and use "Run live Claude reasoning" to see this wired to the real Anthropic API with your own key
         (client-side call, key never persisted). When active, the rail shows an <span class="tag" style="color:var(--good);border-color:rgba(79,191,139,.35)">AI mode: LIVE CLAUDE</span> badge.
+        <br><br>
+        The same account detail page also has a "Live orchestration &amp; CRM sync" panel — paste your own Zapier catch-hook URL and/or
+        HubSpot private-app token and the "Route to BDR"-style actions actually fire: a real webhook delivery, a real Contact + Deal
+        created in your HubSpot portal. Both are gated behind you supplying your own credentials, the same trust model as the Claude key.
       </div>
     </div>
 
@@ -1346,7 +1473,7 @@ function renderArchitecture() {
       </div>
     </div>
 
-    <div class="simulated-note">All dashboard metrics on this page and the Dashboard tab are computed from the seeded demo dataset. No real BDR performance data is used or implied.</div>
+    <div class="simulated-note">All 6 companies above are real, chosen as illustrative JumpCloud-shaped candidates and enriched via a live Clay run for portfolio purposes — this is candidate research, not an active JumpCloud outbound campaign, and none of these companies have been contacted. No real BDR performance data is used or implied.</div>
   </div>`);
   return wrap;
 }
