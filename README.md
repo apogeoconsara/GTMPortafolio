@@ -15,28 +15,41 @@ sitio estático (`public/` como publish directory).
 
 ## Qué es este proyecto
 
-Corre 6 empresas reales por un pipeline: enriquecimiento real (Clay, snapshot único) →
+Corre 15 empresas reales por un pipeline: enriquecimiento real (Clay, snapshot único) →
 detección de señales de compra → scoring ICP determinístico → **gate de calificación**
 (¿vale la pena gastar cómputo de IA + atención de un seller en esta cuenta?) →
 razonamiento de IA → persona → personalización → secuencia multi-touch → ruteo (BDR /
 enriquecimiento de contacto / nurture / suprimir) → feedback loop. Corre 100% client-side
 en un único `index.html`, sin backend, desplegado en Netlify.
 
-## Las 6 cuentas (datos reales, Clay, 2026-09-04)
+## Las 15 cuentas (datos reales, Clay, 2026-09-04)
 
 | Empresa | Empleados | Señal real detectada | Score | Tier |
 |---|---|---|---|---|
-| Webflow | 1,617 | Crecimiento +16% YoY; CISO real identificado (Ty Sbano) | 60 | B |
+| Vercel | 1,014 | Vacante real de "Product Security Engineer"; crecimiento +32% YoY; VP of Security real con **email verificado** | 85 | **A** |
+| PostHog | 219 | Cita real de vacante: "we're a natively remote company"; crecimiento +90% YoY; Security Engineer real con **email verificado** | 80 | **A** |
+| Buffer | 328 | Equipo distribuido real (Sri Lanka/Estonia/Portugal); crecimiento +32% YoY; Security Engineer real con **email verificado** | 80 | **A** |
 | Retool | 416 | Vacantes reales de "Application Security Engineer" + "IT Engineer"; Head of Security real identificado (DJ McCulloch) | 65 | B |
 | Clio | 2,722 | Vacante real de "Application Security Developer"; ronda Serie F de $900M citada para "scale global expansion"; VP Security/CISO real identificado (George Totev) | 65 | B |
+| Webflow | 1,617 | Crecimiento +16% YoY; CISO real identificado (Ty Sbano) | 60 | B |
+| Help Scout | 290 | Cita real: "fully remote team since day one, 120+ teammates... all over the world"; Director of Privacy and Security real identificado | 60 | B |
 | Podium | 1,638 | Sin señales de IT/seguridad detectadas en esta pasada | 40 | C |
 | Zapier | 1,524 | Plantilla distribuida (US/UK/India/Portugal/Canadá) confirmada vía búsqueda de contactos de Clay | 40 | C |
 | Motive | 6,359 | Crecimiento +29% YoY, pero excede el techo de headcount (2,000) de este ICP de ejemplo | 35 | C |
+| Automattic | 2,170 | Cita real: "1,730+ Automatticians in 92 countries"; pero -46% YoY (reestructuración real anunciada en 2025) | 35 | C |
+| Doist | 125 | Cita real: "fully remote team of 100+ people across 35+ countries"; pero por debajo del piso de 200 empleados de este ICP | 35 | C |
+| Loom | 295 | Remoto-first real (parte de Atlassian desde 2023), sin más señales detectadas | 30 | C |
+| 37signals | 176 | Por debajo del piso de 200 empleados; sin vacantes de IT/seguridad detectadas | 25 | C |
+| GitLab | 3,432 | All-remote públicamente documentado, pero excede el techo de headcount y su industria real en Clay no coincide con las industrias objetivo | 15 | C |
 
-Ninguna llega a Tier A porque no se verificó ningún email (eso costaría más créditos de
-Clay) — es un resultado honesto: el scorer determinístico no regala nada sin evidencia
-verificada. Desde la pestaña **ICP Config** se puede bajar el umbral de Tier A en vivo y
-ver a Retool/Clio cruzar a BDR-ready.
+**Distribución real: 3 Tier A, 4 Tier B, 8 Tier C.** No es un 5/5/5 perfecto — llegar ahí
+exigiría verificar más emails reales (más créditos de Clay) para varias cuentas de Tier C
+que ya tienen buena señal pero ningún contacto identificado. Los 3 Tier A son 100%
+honestos: cada uno tiene evidencia real (vacante de seguridad, crecimiento, multi-país) **y**
+un contacto real con email verificado — por eso también son las únicas 3 que dan
+"Route to BDR" y pueden disparar de verdad el panel de Zapier/HubSpot. Desde **ICP Config**
+se puede bajar el umbral de Tier A en vivo y ver a más cuentas cruzar a BDR-ready sin
+necesidad de más datos.
 
 ## Para qué vacante mapea
 
