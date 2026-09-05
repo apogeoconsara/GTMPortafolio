@@ -1,0 +1,10 @@
+[build]
+  publish = "public"
+  command = ""
+  functions = "netlify/functions"
+
+[context.deploy-preview]
+  command = ""
+
+[context.branch-deploy]
+  command = ""
