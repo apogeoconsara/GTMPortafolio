@@ -193,20 +193,27 @@ tbody tr:hover { background: var(--panel-2); }
 .explain-list li.pos { color: var(--good); }
 
 /* --- Architecture --- */
-.flow-diagram { display: flex; flex-direction: column; padding: 16px 20px 20px; }
-.flow-card { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-left: 4px solid var(--tier-c); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); }
-.flow-card.engine { border-left-color: var(--tier-c); }
-.flow-card.agent { border-left-color: var(--warn); background: #FFF8F0; }
-.flow-card.gate { border-left-color: var(--accent); background: var(--accent-dim); }
-.flow-card .fc-badge { flex-shrink: 0; font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 3px 8px; border-radius: 20px; margin-top: 2px; }
-.flow-card.engine .fc-badge { background: rgba(100,116,139,.16); color: var(--tier-c); }
-.flow-card.agent .fc-badge { background: rgba(180,83,9,.16); color: var(--warn); }
-.flow-card.gate .fc-badge { background: rgba(14,143,118,.16); color: var(--accent); }
-.flow-card h4 { margin: 0 0 4px; font-family: var(--font-head); font-size: 14.5px; font-weight: 600; color: var(--text); }
-.flow-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
-.flow-connector { display: flex; align-items: center; gap: 8px; padding: 6px 0 6px 18px; color: var(--muted); font-size: 12px; }
-.flow-connector .fc-line { width: 1px; height: 16px; background: var(--line); margin-left: 3px; }
-.flow-connector.branch { color: var(--warn); font-weight: 600; }
+.pipeline-stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ps-node { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-body); font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 20px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; transition: background .12s, border-color .12s; }
+.ps-node:hover { border-color: var(--muted); }
+.ps-node .ps-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.ps-node.engine .ps-dot { background: var(--tier-c); }
+.ps-node.agent .ps-dot { background: var(--warn); }
+.ps-node.gate .ps-dot { background: var(--accent); }
+.ps-node.active { color: #fff; border-color: transparent; }
+.ps-node.engine.active { background: var(--tier-c); }
+.ps-node.agent.active { background: var(--warn); }
+.ps-node.gate.active { background: var(--accent); }
+.ps-node.active .ps-dot { background: #fff; }
+.ps-arrow { color: var(--muted); font-size: 12px; }
+.ps-detail { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel-2); min-height: 74px; }
+.ps-detail h4 { margin: 0 0 4px; font-family: var(--font-head); font-size: 14.5px; font-weight: 600; color: var(--text); }
+.ps-detail p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.ps-detail .ps-branch { margin-top: 6px; color: var(--warn); font-weight: 600; font-size: 12.5px; }
+.ps-detail .fc-badge { flex-shrink: 0; font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: .04em; padding: 3px 8px; border-radius: 20px; margin-top: 2px; }
+.ps-detail .fc-badge.engine { background: rgba(100,116,139,.16); color: var(--tier-c); }
+.ps-detail .fc-badge.agent { background: rgba(180,83,9,.16); color: var(--warn); }
+.ps-detail .fc-badge.gate { background: rgba(14,143,118,.16); color: var(--accent); }
 .stack-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px; }
 .stack-col h3 { font-family: var(--font-head); font-size: 13px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
 .stack-col .stack-note { color: var(--muted); font-size: 11.5px; margin-bottom: 10px; }
@@ -1779,15 +1786,14 @@ function renderArchitecture() {
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2><span class="hint">the same 5 stages above, broken into every actual step</span></div>
-      <div class="flow-diagram">
-        ${PIPELINE_FLOW.map((s, i) => `
-          <div class="flow-card ${s.type}">
-            <span class="fc-badge">${s.type.toUpperCase()}</span>
-            <div><h4>${esc(s.name)}</h4><p>${esc(s.detail)}</p></div>
-          </div>
-          ${i < PIPELINE_FLOW.length - 1 ? `<div class="flow-connector${s.branch ? ' branch' : ''}"><div class="fc-line"></div>↓ ${s.branch ? esc(s.branch) : ''}</div>` : ''}
-        `).join("")}
+      <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2><span class="hint">click a step — the same 5 stages above, broken into every actual step</span></div>
+      <div class="body-pad" style="padding-bottom:8px">
+        <div class="pipeline-stepper" id="pipeline-stepper">
+          ${PIPELINE_FLOW.map((s, i) => `<button class="ps-node ${s.type}${i === 0 ? ' active' : ''}" data-i="${i}"><span class="ps-dot"></span>${esc(s.name)}</button>${i < PIPELINE_FLOW.length - 1 ? '<span class="ps-arrow">→</span>' : ''}`).join("")}
+        </div>
+      </div>
+      <div class="body-pad" style="padding-top:0">
+        <div class="ps-detail" id="pipeline-detail"></div>
       </div>
     </div>
 
@@ -1925,6 +1931,22 @@ function renderArchitecture() {
 
     <div class="simulated-note">All 15 companies above are real, chosen as illustrative JumpCloud-shaped candidates and enriched via a live Clay run for portfolio purposes — this is candidate research, not an active JumpCloud outbound campaign, and none of these companies have been contacted. No real BDR performance data is used or implied.</div>
   </div>`);
+
+  const psNodes = wrap.querySelectorAll(".ps-node");
+  const psDetail = wrap.querySelector("#pipeline-detail");
+  function renderPsDetail(i) {
+    const s = PIPELINE_FLOW[i];
+    psDetail.innerHTML = `
+      <span class="fc-badge ${s.type}">${s.type.toUpperCase()}</span>
+      <div><h4>${esc(s.name)}</h4><p>${esc(s.detail)}</p>${s.branch ? `<div class="ps-branch">↳ ${esc(s.branch)}</div>` : ''}</div>`;
+  }
+  psNodes.forEach(btn => btn.addEventListener("click", () => {
+    psNodes.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    renderPsDetail(Number(btn.dataset.i));
+  }));
+  renderPsDetail(0);
+
   return wrap;
 }
 
