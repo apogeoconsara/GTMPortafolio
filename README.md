@@ -57,8 +57,8 @@ necesidad de más datos.
 |---|---|
 | Pipeline completo sourcing → contacto → research → priorización → personalización → sequencing → orchestration, ahora sobre datos reales de Clay | Requisito explícito de la vacante, cubierto extremo a extremo |
 | Superficie de tools MCP documentada (`search_account`, `get_account_score`, `qualify_account`, `list_high_priority_accounts`, `route_account`) con permisos READ/WRITE, contrato de input/output y gate de aprobación humana en la única tool de escritura | Experiencia demostrable con MCP — diseño de tools con permisos y contratos bien definidos |
-| Llamada real opcional a la API de Claude en el paso de AI Research & Reasoning (con key propia, client-side) | Experiencia con Claude (Cowork, Code, API), outputs estructurados |
-| **Orquestación y CRM sync reales opcionales**: panel "Live orchestration" por cuenta dispara un webhook real de Zapier y crea un Contact + Deal real en HubSpot, con credenciales propias del visitante (mismo modelo de confianza que la key de Claude) | Herramientas de GTM (CRM tipo HubSpot/Salesforce, orquestación) — ya no solo documentadas, sino verificablemente conectables |
+| Llamada real al paso de AI Research & Reasoning vía OpenAI (`gpt-4o-mini`), servida por una Netlify Function con la key del dueño del sitio — sin credencial del visitante — devolviendo tokens/latencia/costo reales | Experiencia con integración real de un LLM vía API/backend, outputs estructurados, control de costo por llamada |
+| **Orquestación y CRM sync reales opcionales**: panel "Live orchestration" por cuenta dispara un webhook real de Zapier y crea un Contact + Deal real en HubSpot, con credenciales propias del visitante | Herramientas de GTM (CRM tipo HubSpot/Salesforce, orquestación) — ya no solo documentadas, sino verificablemente conectables |
 | Sección de arquitectura que separa "Current prototype" (lo que corre/corrió de verdad, incluyendo el enriquecimiento real de Clay) de "Production integration design" (Salesforce, Marketo, Gong Engage, backend con credenciales del lado del servidor) | Honestidad técnica ante una revisión de código |
 | Panel de ICP Configuration editable en vivo (headcount, geos, industrias, pesos de señales, umbrales de tier) | Rol builder hands-on, no experimento aislado — el sistema es configurable, no hardcodeado |
 
@@ -98,8 +98,8 @@ las estrategias que un rol de GTM AI Operations típicamente tiene que dominar:
 **La IA no toca todo el flujo.** El scoring ICP y el ruteo son y seguirán siendo
 determinísticos: el criterio de negocio es no gastar cómputo de modelo ni atención de un
 seller en una cuenta de baja calidad antes de que el score lo justifique. La IA —
-determinística en este demo, o Claude en vivo si se activa desde el detalle de una
-cuenta — se usa únicamente donde el razonamiento no estructurado agrega valor: sintetizar
+determinística en este demo, o un modelo de OpenAI en vivo si se activa desde el detalle
+de una cuenta — se usa únicamente donde el razonamiento no estructurado agrega valor: sintetizar
 evidencia, formular una hipótesis de dolor (marcada explícitamente `FACT` vs
 `INFERENCE`), identificar información faltante y redactar personalización fundamentada
 en evidencia citada.
@@ -118,14 +118,23 @@ Es un HTML estático sin build step — se puede abrir `public/index.html` direc
 un navegador, o desplegar `public/` como publish directory en Netlify (o cualquier host
 estático) usando este `netlify.toml`.
 
-## Modo Claude en vivo (opcional)
+## Modo OpenAI en vivo (opcional)
 
-Desde el detalle de cualquier cuenta hay un panel "Run live Claude reasoning" para pegar
-una API key propia de Anthropic y reemplazar, solo para esa cuenta y esa sesión de
-navegador, la simulación determinística de razonamiento por una llamada real a la API de
-Claude (`anthropic-dangerous-direct-browser-access`). La key nunca se persiste ni se
-envía a nada que no sea `api.anthropic.com`. El score ICP y la decisión de ruteo no
-cambian — siguen siendo deterministas.
+Desde el detalle de cualquier cuenta hay un panel "Run live AI reasoning (OpenAI)" que
+llama a `/.netlify/functions/ai-reasoning`, una Netlify Function que sostiene la
+`OPENAI_API_KEY` del dueño del sitio del lado del servidor y hace una llamada real a
+`gpt-4o-mini` para reemplazar, solo para esa cuenta y esa sesión de navegador, la
+simulación determinística del paso de razonamiento. El visitante no necesita pegar
+ninguna credencial propia — la función solo acepta las 15 empresas que ya están en el
+dataset público, para no convertirse en un proxy abierto de prompts arbitrarios. La
+respuesta incluye tokens reales, latencia y costo estimado, que se muestran en el panel
+y se suman a un "AI spend" acumulado visible en Outcomes. El score ICP y la decisión de
+ruteo no cambian — siguen siendo deterministas.
+
+**Para activarlo**, agrega `OPENAI_API_KEY` (una API key de OpenAI) en el dashboard de
+Netlify de este sitio (Site configuration → Environment variables). Si no está
+configurada, el botón sigue mostrando la simulación determinística y explica por qué
+falló, en vez de romperse silenciosamente.
 
 ## Orquestación en vivo — Zapier + HubSpot (opcional)
 
@@ -138,10 +147,10 @@ En el mismo detalle de cuenta hay un panel "Live orchestration & CRM sync":
   Deal en tu portal (requiere que tu private app tenga scopes de `crm.objects.contacts.write`
   y `crm.objects.deals.write`, y CORS habilitado para llamadas directas desde el navegador).
 
-Ambos usan el mismo modelo de confianza que la key de Claude: la credencial es tuya, se usa
-solo para esa llamada directa desde tu navegador, nunca se persiste ni pasa por ningún
-servidor intermedio. Nada de esto se dispara automáticamente para las 15 cuentas — solo
-cuando alguien hace clic explícitamente en una cuenta.
+Ambos usan el mismo modelo de confianza: la credencial es tuya, se usa solo para esa
+llamada directa desde tu navegador, nunca se persiste ni pasa por ningún servidor
+intermedio. Nada de esto se dispara automáticamente para las 15 cuentas — solo cuando
+alguien hace clic explícitamente en una cuenta.
 
 ## Backend real — Netlify Function (para que cualquier visitante lo dispare sin credenciales)
 

@@ -388,10 +388,10 @@ tbody tr:hover { background: var(--panel-2); }
    GTM AI OUTBOUND ENGINE — core engine
    Deterministic enrichment, signal detection, scoring, persona, routing.
    AI Research & Reasoning defaults to a deterministic simulator that returns
-   the exact JSON shape a Claude API call would produce. Optionally, from the
-   Architecture tab, a viewer can supply their own Anthropic API key to run a
-   real Claude call for a single account's reasoning step (client-side only,
-   never persisted or sent anywhere but api.anthropic.com). Scoring and
+   the exact JSON shape an OpenAI API call would produce. Optionally, from an
+   account's detail page, a viewer can trigger a real OpenAI call for that
+   account's reasoning step, run server-side via a Netlify Function holding
+   the site owner's own API key — no visitor credential needed. Scoring and
    routing are never touched by that call — see "Design principle" below.
 
    DESIGN PRINCIPLE: the model is never allowed to set the ICP score or the
@@ -599,11 +599,11 @@ function identifyPersona(c, signals) {
 // ---------------------------------------------------------------------------
 // PHASE 5 — AI REASONING (structured JSON)
 // DEMO NOTE: this function is a deterministic stand-in that returns the exact
-// schema a Claude API call would return. It never sets icp_score or tier —
-// those are passed in from the deterministic scorer. From the Architecture
-// tab, a viewer can optionally replace this output for one account with a
-// real call to the Claude API (see callClaudeLive below); the JSON shape is
-// identical either way, so nothing downstream needs to change.
+// schema an OpenAI API call would return. It never sets icp_score or tier —
+// those are passed in from the deterministic scorer. From an account's
+// detail page, a viewer can optionally replace this output for one account
+// with a real call to the OpenAI API (see callOpenAILive below); the JSON
+// shape is identical either way, so nothing downstream needs to change.
 // ---------------------------------------------------------------------------
 function generateAIReasoning(c, signals, score) {
   const detected = signals.filter(s => s.detected);
@@ -776,6 +776,11 @@ function qaCheckOutreach(signals, outreach, reasoning) {
 // runs in a fixed sequence in the browser (not over real network time), so
 // this trace shows order and outcome, not real per-step latency.
 // ---------------------------------------------------------------------------
+const LIVE_REASONING_OVERRIDES = {}; // accountId -> reasoning object from OpenAI
+const LIVE_REASONING_META = {}; // accountId -> { model, tokens, latency_ms, estimated_cost_usd }
+let LIVE_AI_SPEND_USD = 0;
+let LIVE_AI_CALL_COUNT = 0;
+
 function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing) {
   const detectedCount = signals.filter(s => s.detected).length;
   const steps = [
@@ -785,7 +790,7 @@ function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, rout
     { type: "gate", name: "Qualification Gate", detail: score.tier === "C" ? "Score below the Tier B threshold — this account doesn't clear the bar to justify reasoning, persona work or outreach; the trace stops here." : "Score clears the gate — continuing to AI Reasoning." }
   ];
   if (score.tier !== "C") {
-    steps.push({ type: "agent", name: "AI Reasoning", confidence: reasoning.confidence, detail: reasoning.source === "live_claude" ? "Live Claude API call (viewer-supplied key)." : "Deterministic simulator — returns the exact JSON shape a Claude call would produce." });
+    steps.push({ type: "agent", name: "AI Reasoning", confidence: reasoning.confidence, detail: reasoning.source === "live_openai" ? `Live OpenAI API call (server-side key)${LIVE_REASONING_META[c.id] ? ` — ${LIVE_REASONING_META[c.id].total_tokens} tokens, ${LIVE_REASONING_META[c.id].latency_ms}ms, ~$${LIVE_REASONING_META[c.id].estimated_cost_usd.toFixed(6)}` : ""}.` : "Deterministic simulator — returns the exact JSON shape an OpenAI call would produce." });
     steps.push({ type: "engine", name: "Persona Selection", detail: `Selected: ${persona.persona}.` });
     steps.push({ type: "engine", name: "Outreach Templating", detail: reasoning.confidence === "low" ? "Held — insufficient signal to draft outreach." : "Generated from the primary cited signal." });
     steps.push({ type: "engine", name: "QA Check", detail: qa.note, failed: !qa.passed });
@@ -846,67 +851,35 @@ function recomputePipeline() {
 }
 
 // ---------------------------------------------------------------------------
-// OPTIONAL — live Claude call for AI Research & Reasoning on a single account.
-// Client-side only demo wiring: the key never leaves the browser except in
-// the direct request to api.anthropic.com. Scoring/routing are untouched —
-// only ai_reasoning (and the outreach copy derived from it) is replaced.
+// OPTIONAL — live OpenAI call for AI Research & Reasoning on a single account.
+// Runs server-side via a Netlify Function (netlify/functions/ai-reasoning.mjs)
+// holding the site owner's OPENAI_API_KEY — no visitor credential needed.
+// Scoring/routing are untouched — only ai_reasoning (and the outreach copy
+// derived from it) is replaced. The function returns real token usage,
+// latency and an estimated cost, tracked here for the Agent Run trace and
+// the Outcomes page's running AI-spend total.
 // ---------------------------------------------------------------------------
-let LIVE_CLAUDE_KEY = "";
-const LIVE_REASONING_OVERRIDES = {}; // accountId -> reasoning object from Claude
-
-async function callClaudeLive(c, signals, score) {
-  const system = `You are a B2B GTM research assistant. You will be given a company's enrichment data and detected buying signals for a company evaluating JumpCloud (unified identity, device, and access management). Return ONLY valid JSON matching this schema, no prose outside the JSON:
-{
-  "primary_signal": string,
-  "secondary_signals": string[],
-  "pain_hypothesis": string (must start with "FACT:" or "INFERENCE:" and be honest about which one it is),
-  "reason_to_contact_now": string,
-  "outreach_angle": string,
-  "confidence": "high" | "medium" | "low",
-  "missing_information": string[]
-}
-Never invent facts not present in the input. You do not set the ICP score or tier — those are provided to you as already-decided context, not something to re-evaluate.`;
-
-  const user = JSON.stringify({
-    company: { name: c.company_name, industry: c.industry, employee_count: c.employee_count,
-      countries_of_operation: c.countries_of_operation, estimated_growth: c.estimated_growth,
-      technology_context: c.technology_context },
-    detected_signals: signals.filter(s => s.detected).map(s => ({ name: s.signal_name, evidence: s.evidence, confidence: s.confidence })),
-    icp_score: score.total_score, tier: score.tier
-  });
-
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+async function callOpenAILive(c, signals, score) {
+  const res = await fetch("/.netlify/functions/ai-reasoning", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": LIVE_CLAUDE_KEY,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-5",
-      max_tokens: 600,
-      system,
-      messages: [{ role: "user", content: user }]
+      company: { name: c.company_name, industry: c.industry, employee_count: c.employee_count,
+        countries_of_operation: c.countries_of_operation, estimated_growth: c.estimated_growth,
+        technology_context: c.technology_context },
+      detected_signals: signals.filter(s => s.detected).map(s => ({ name: s.signal_name, evidence: s.evidence, confidence: s.confidence })),
+      icp_score: score.total_score, tier: score.tier
     })
   });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    throw new Error(`Claude API error ${res.status}: ${errText.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  const text = (data.content || []).map(b => b.text || "").join("");
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Claude response did not contain parseable JSON.");
-  const parsed = JSON.parse(jsonMatch[0]);
-  return { ...parsed, icp_score: score.total_score, tier: score.tier, source: "live_claude" };
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Backend error ${res.status}`);
+  return data; // { reasoning, meta }
 }
 
 // ---------------------------------------------------------------------------
 // OPTIONAL — live orchestration (Zapier webhook + HubSpot CRM write) for the
-// "engagement orchestration" and "CRM sync" steps. Same trust model as the
-// Claude key above: the viewer pastes their OWN Zapier webhook URL / HubSpot
+// "engagement orchestration" and "CRM sync" steps. The viewer pastes their
+// OWN Zapier webhook URL / HubSpot
 // private-app token, used only for a direct browser request to that one
 // endpoint, never persisted or sent anywhere else. This is what actually
 // fires when a viewer clicks the buttons below — nothing runs automatically
@@ -982,7 +955,7 @@ function renderAiModeBadge() {
   const wrap = document.getElementById("ai-mode-badge");
   wrap.innerHTML = "";
   if (Object.keys(LIVE_REASONING_OVERRIDES).length > 0) {
-    wrap.appendChild(el(`<div class="rail-badge live">AI mode: LIVE CLAUDE</div>`));
+    wrap.appendChild(el(`<div class="rail-badge live">AI mode: LIVE OPENAI</div>`));
   }
 }
 
@@ -1121,7 +1094,7 @@ function renderAccounts() {
 // "Ask about this account" — a deterministic Q&A over data this pipeline
 // already computed for the account. This is pattern-matching over already-
 // real data, not a new model call — it never invents a fact that isn't
-// already in the account record. If the viewer has activated live Claude
+// already in the account record. If the viewer has activated live OpenAI
 // reasoning for this account (see the panel below), answers about "why now"
 // / "pain hypothesis" reflect that live output instead of the simulator,
 // same as everywhere else in this page.
@@ -1187,7 +1160,7 @@ function renderAccountDetail(id) {
   const wrap = el(`<div>
     <button class="back-btn" id="back">&larr; Back</button>
     <div class="page-head">
-      <h1>${esc(c.company_name)} ${isLive ? '<span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">LIVE CLAUDE</span>' : ''}</h1>
+      <h1>${esc(c.company_name)} ${isLive ? '<span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">LIVE OPENAI</span>' : ''}</h1>
       <p>${esc(c.company_description)}</p>
     </div>
     <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -1281,7 +1254,7 @@ function renderAccountDetail(id) {
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>AI interpretation${isLive ? ' <span style="color:var(--good)">· live Claude output</span>' : ''}</h2><span class="hint">structured reasoning — never sets score or routing</span></div>
+          <div class="panel-head"><h2>AI interpretation${isLive ? ' <span style="color:var(--good)">· live OpenAI output</span>' : ''}</h2><span class="hint">structured reasoning — never sets score or routing</span></div>
           <div class="body-pad">
             <div class="reasoning-block"><div class="k">Primary signal</div>${esc(r.primary_signal)}</div>
             <div class="reasoning-block"><div class="k">Secondary signals</div>${r.secondary_signals.length ? r.secondary_signals.map(esc).join(", ") : "none"}</div>
@@ -1332,16 +1305,16 @@ function renderAccountDetail(id) {
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>Run live Claude reasoning</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
+          <div class="panel-head"><h2>Run live AI reasoning (OpenAI)</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
           <div class="body-pad">
             <div class="claude-live-box">
-              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Anthropic API key to call the real Claude API for this account's reasoning step. The key is used only for this browser request to api.anthropic.com — it is never stored, logged, or sent anywhere else. Scoring and routing above stay deterministic either way.</p>
-              <input type="password" id="claude-key-input" placeholder="sk-ant-..." value="${LIVE_CLAUDE_KEY ? esc(LIVE_CLAUDE_KEY) : ""}" />
-              <div style="margin-top:10px;display:flex;gap:10px;align-items:center">
-                <button class="btn primary small" id="run-live-btn">Run live Claude call</button>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Calls a real OpenAI model (gpt-4o-mini) for this account's reasoning step, through a Netlify Function that holds the site owner's own API key server-side — no credential needed from you. Scoring and routing above stay deterministic either way.</p>
+              <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn primary small" id="run-live-btn">Run live OpenAI call</button>
                 ${isLive ? '<button class="btn small" id="revert-live-btn">Revert to simulated</button>' : ''}
               </div>
               <div class="claude-status" id="claude-status"></div>
+              ${LIVE_REASONING_META[id] ? `<div class="claude-status" style="color:var(--muted)">Model ${esc(LIVE_REASONING_META[id].model)} · ${LIVE_REASONING_META[id].total_tokens} tokens (${LIVE_REASONING_META[id].prompt_tokens} in / ${LIVE_REASONING_META[id].completion_tokens} out) · ${LIVE_REASONING_META[id].latency_ms}ms · ~$${LIVE_REASONING_META[id].estimated_cost_usd.toFixed(6)}</div>` : ''}
             </div>
           </div>
         </div>
@@ -1350,7 +1323,7 @@ function renderAccountDetail(id) {
           <div class="panel-head"><h2>Live orchestration &amp; CRM sync</h2><span class="hint">optional — real Zapier + HubSpot, your own credentials</span></div>
           <div class="body-pad">
             <div class="claude-live-box">
-              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Zapier "Webhooks by Zapier" catch-hook URL and/or your own HubSpot private-app access token to actually fire the engagement-orchestration and CRM-sync steps for this account. Same trust model as the Claude key above — used only for a direct browser request to that one service, never persisted or sent anywhere else. This never runs automatically for every account, only when you click a button below.</p>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Zapier "Webhooks by Zapier" catch-hook URL and/or your own HubSpot private-app access token to actually fire the engagement-orchestration and CRM-sync steps for this account. Used only for a direct browser request to that one service, never persisted or sent anywhere else. This never runs automatically for every account, only when you click a button below.</p>
               <input type="text" id="zapier-url-input" placeholder="https://hooks.zapier.com/hooks/catch/..." value="${ZAPIER_WEBHOOK_URL ? esc(ZAPIER_WEBHOOK_URL) : ""}" style="margin-bottom:8px" />
               <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
                 <button class="btn small" id="fire-zapier-btn">Send test webhook to Zapier</button>
@@ -1420,23 +1393,23 @@ function renderAccountDetail(id) {
 
   const statusEl = wrap.querySelector("#claude-status");
   wrap.querySelector("#run-live-btn").addEventListener("click", async () => {
-    const key = wrap.querySelector("#claude-key-input").value.trim();
-    if (!key) { statusEl.textContent = "Enter an Anthropic API key first."; statusEl.className = "claude-status err"; return; }
-    LIVE_CLAUDE_KEY = key;
-    statusEl.textContent = "Calling Claude API...";
+    statusEl.textContent = "Calling OpenAI API...";
     statusEl.className = "claude-status";
     try {
-      const liveReasoning = await callClaudeLive(c, a.signals, a.score);
-      LIVE_REASONING_OVERRIDES[id] = liveReasoning;
+      const { reasoning, meta } = await callOpenAILive(c, a.signals, a.score);
+      LIVE_REASONING_OVERRIDES[id] = reasoning;
+      LIVE_REASONING_META[id] = meta;
+      LIVE_AI_SPEND_USD += meta.estimated_cost_usd;
+      LIVE_AI_CALL_COUNT += 1;
       render();
       openAccount(id);
     } catch (err) {
-      statusEl.textContent = "Failed: " + err.message + " — falling back to the simulated reasoning above. This usually means the browser is blocked from calling api.anthropic.com directly (CORS) or the key is invalid; a production build would proxy this through a backend.";
+      statusEl.textContent = "Failed: " + err.message + " — falling back to the simulated reasoning above. This usually means OPENAI_API_KEY isn't configured yet on this Netlify site (see README).";
       statusEl.className = "claude-status err";
     }
   });
   const revertBtn = wrap.querySelector("#revert-live-btn");
-  if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; openAccount(id); });
+  if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; delete LIVE_REASONING_META[id]; openAccount(id); });
 
   const orchStatus = wrap.querySelector("#orch-status");
   wrap.querySelector("#fire-zapier-btn").addEventListener("click", async () => {
@@ -1469,7 +1442,7 @@ function renderAccountDetail(id) {
       orchStatus.className = "claude-status ok";
       openAccount(id);
     } catch (err) {
-      orchStatus.textContent = "Failed: " + err.message + " — HubSpot blocks direct browser calls without a CORS-enabled private app; a production build would proxy this through a backend, same as the Claude call note above.";
+      orchStatus.textContent = "Failed: " + err.message + " — HubSpot blocks direct browser calls without a CORS-enabled private app; a production build would proxy this through a backend, same as the AI reasoning call above.";
       orchStatus.className = "claude-status err";
     }
   });
@@ -1660,6 +1633,7 @@ function renderOutcomes() {
         ${fieldRow("QA pass rate", `${ACCOUNTS.filter(a => a.qa.passed).length}/${ACCOUNTS.length} accounts — every generated outreach traced to a cited signal or was correctly held back`)}
         ${fieldRow("Accounts needing contact enrichment before BDR", `${ACCOUNTS.filter(a => a.routing.action === "Contact enrichment").length}`)}
         ${fieldRow("Tier B accounts one verified contact away from Tier A", `${tierB.length} (see ICP Config to test lowering the threshold instead)`)}
+        ${fieldRow("AI spend this session (real)", LIVE_AI_CALL_COUNT > 0 ? `$${LIVE_AI_SPEND_USD.toFixed(6)} across ${LIVE_AI_CALL_COUNT} live OpenAI call(s)` : "$0.00 — no live OpenAI call has been triggered yet this session, see any account's detail page")}
       </div>
     </div>
 
@@ -1791,7 +1765,7 @@ const MCP_TOOLS = [
 
 function renderArchitecture() {
   const wrap = el(`<div>
-    <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its enrichment is a real one-time Clay run against real companies, and a viewer can opt into a real Claude reasoning call and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
+    <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its enrichment is a real one-time Clay run against real companies, and a viewer can opt into a real OpenAI reasoning call (server-side, via a Netlify Function) and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
 
     <div class="panel">
       <div class="panel-head"><h2>The system, in one glance</h2><span class="hint">read left to right — this is the whole idea</span></div>
@@ -1891,8 +1865,8 @@ function renderArchitecture() {
             </tr>
             <tr>
               <td>AI reasoning</td>
-              <td><span class="live-dot"></span>Real Claude API call, optional per account with your own key</td>
-              <td><span class="design-dot"></span>Same Claude call, made server-side by default instead of viewer-supplied</td>
+              <td><span class="live-dot"></span>Real OpenAI API call (gpt-4o-mini), server-side via a Netlify Function — no key from you</td>
+              <td><span class="design-dot"></span>Same call, likely a larger reasoning model and per-account rate limiting on top</td>
             </tr>
             <tr>
               <td>Routing</td>
@@ -1928,12 +1902,14 @@ function renderArchitecture() {
       <div class="panel-head"><h2>Live wiring — proof, not just documentation</h2></div>
       <div class="body-pad" style="font-size:13.5px;color:var(--muted);line-height:1.7">
         The AI Research &amp; Reasoning step is the only place a model is allowed to touch this pipeline — never scoring, never routing.
-        Open any account's detail page and use "Run live Claude reasoning" to see this wired to the real Anthropic API with your own key
-        (client-side call, key never persisted). When active, the rail shows an <span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">AI mode: LIVE CLAUDE</span> badge.
+        Open any account's detail page and use "Run live AI reasoning (OpenAI)" to see this wired to the real OpenAI API through a Netlify
+        Function that holds the site owner's key server-side — no credential needed from you. The response includes real token usage,
+        latency and estimated cost, shown right below the button and rolled into an Agent Run trace step. When active, the rail shows an
+        <span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">AI mode: LIVE OPENAI</span> badge.
         <br><br>
         The same account detail page also has a "Live orchestration &amp; CRM sync" panel — paste your own Zapier catch-hook URL and/or
         HubSpot private-app token and the "Route to BDR"-style actions actually fire: a real webhook delivery, a real Contact + Deal
-        created in your HubSpot portal. Both are gated behind you supplying your own credentials, the same trust model as the Claude key.
+        created in your HubSpot portal. Those two stay gated behind your own credentials, since they write to services outside this site.
       </div>
     </div>
 
