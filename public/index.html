@@ -193,7 +193,7 @@ tbody tr:hover { background: var(--panel-2); }
 .explain-list li.pos { color: var(--good); }
 
 /* --- Architecture --- */
-.flow-diagram { display: flex; flex-direction: column; padding: 4px 20px 20px; }
+.flow-diagram { display: flex; flex-direction: column; padding: 16px 20px 20px; }
 .flow-card { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-left: 4px solid var(--tier-c); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); }
 .flow-card.engine { border-left-color: var(--tier-c); }
 .flow-card.agent { border-left-color: var(--warn); background: #FFF8F0; }
@@ -286,11 +286,6 @@ tbody tr:hover { background: var(--panel-2); }
 .run-step .conf { font-family: var(--font-mono); font-size: 10.5px; color: var(--warn); margin-left: 6px; }
 .decision-trace-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .ops-criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.pill-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 16px 20px 4px; }
-.pill-flow .pf-step { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; padding: 6px 12px; border-radius: 20px; letter-spacing: .02em; }
-.pill-flow .pf-step.engine { background: rgba(100,116,139,.2); color: var(--muted); }
-.pill-flow .pf-step.agent { background: rgba(180,83,9,.18); color: var(--warn); }
-.pill-flow .pf-step.gate { background: rgba(14,143,118,.16); color: var(--accent); }
 
 /* --- System at a glance --- */
 .glance-row { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; padding: 4px 4px 6px; }
@@ -317,7 +312,6 @@ tbody tr:hover { background: var(--panel-2); }
 .compare-table .live-dot, .compare-table .design-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: middle; }
 .compare-table .live-dot { background: var(--good); }
 .compare-table .design-dot { background: var(--line); border: 1px solid var(--muted); }
-.pill-flow .pf-arrow { color: var(--muted); font-size: 12px; }
 .decision-trace-grid .dt-card { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
 .decision-trace-grid .dt-card .k { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
 .decision-trace-grid .dt-card .v { font-size: 13px; line-height: 1.45; }
@@ -1194,7 +1188,7 @@ function renderAccountDetail(id) {
       <div class="panel-head"><h2>Run live AI reasoning (OpenAI)</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
       <div class="body-pad">
         <div class="claude-live-box">
-          <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Calls a real OpenAI model (gpt-4o-mini) for this account's reasoning step, through a Netlify Function that holds the site owner's own API key server-side — no credential needed from you. Scoring and routing above stay deterministic either way.</p>
+          <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Real OpenAI call, server-side key — no credential needed from you.</p>
           <div style="display:flex;gap:10px;align-items:center">
             <button class="btn primary small" id="run-live-btn">Run live OpenAI call</button>
             ${isLive ? '<button class="btn small" id="revert-live-btn">Revert to simulated</button>' : ''}
@@ -1323,7 +1317,7 @@ function renderAccountDetail(id) {
           <div class="panel-head"><h2>Live orchestration &amp; CRM sync</h2><span class="hint">optional — real Zapier + HubSpot, your own credentials</span></div>
           <div class="body-pad">
             <div class="claude-live-box">
-              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Paste your own Zapier "Webhooks by Zapier" catch-hook URL and/or your own HubSpot private-app access token to actually fire the engagement-orchestration and CRM-sync steps for this account. Used only for a direct browser request to that one service, never persisted or sent anywhere else. This never runs automatically for every account, only when you click a button below.</p>
+              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Your own Zapier/HubSpot credentials, used only for this one click — never persisted.</p>
               <input type="text" id="zapier-url-input" placeholder="https://hooks.zapier.com/hooks/catch/..." value="${ZAPIER_WEBHOOK_URL ? esc(ZAPIER_WEBHOOK_URL) : ""}" style="margin-bottom:8px" />
               <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
                 <button class="btn small" id="fire-zapier-btn">Send test webhook to Zapier</button>
@@ -1337,7 +1331,7 @@ function renderAccountDetail(id) {
               <div class="claude-status" id="orch-status"></div>
               ${a.routing.action === "Route to BDR" ? `
               <div style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)">
-                <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Or trigger it through the site's own backend — no credentials needed from you. This calls a Netlify Function that holds the site owner's Zapier/HubSpot credentials server-side and only accepts the handful of accounts that actually clear the BDR gate (this one included).</p>
+                <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Or trigger it via the site's own backend — no credentials needed from you.</p>
                 <button class="btn small primary" id="fire-backend-btn">Trigger via site backend</button>
                 <div class="claude-status" id="backend-status"></div>
               </div>` : ''}
@@ -1786,20 +1780,6 @@ function renderArchitecture() {
 
     <div class="panel">
       <div class="panel-head"><h2>Pipeline (matches buildAccountRecord() exactly)</h2><span class="hint">the same 5 stages above, broken into every actual step</span></div>
-      <div class="pill-flow">
-        <span class="pf-step engine">Enrich</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Signals</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Score</span><span class="pf-arrow">→</span>
-        <span class="pf-step gate">Gate</span><span class="pf-arrow">→</span>
-        <span class="pf-step agent">Reason</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Persona</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Personalize</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">QA</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Sequence</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Route</span><span class="pf-arrow">→</span>
-        <span class="pf-step gate">Human approval</span><span class="pf-arrow">→</span>
-        <span class="pf-step engine">Learn</span>
-      </div>
       <div class="flow-diagram">
         ${PIPELINE_FLOW.map((s, i) => `
           <div class="flow-card ${s.type}">
@@ -1901,15 +1881,7 @@ function renderArchitecture() {
     <div class="panel">
       <div class="panel-head"><h2>Live wiring — proof, not just documentation</h2></div>
       <div class="body-pad" style="font-size:13.5px;color:var(--muted);line-height:1.7">
-        The AI Research &amp; Reasoning step is the only place a model is allowed to touch this pipeline — never scoring, never routing.
-        Open any account's detail page and use "Run live AI reasoning (OpenAI)" to see this wired to the real OpenAI API through a Netlify
-        Function that holds the site owner's key server-side — no credential needed from you. The response includes real token usage,
-        latency and estimated cost, shown right below the button and rolled into an Agent Run trace step. When active, the rail shows an
-        <span class="tag" style="color:var(--good);border-color:rgba(22,163,74,.35)">AI mode: LIVE OPENAI</span> badge.
-        <br><br>
-        The same account detail page also has a "Live orchestration &amp; CRM sync" panel — paste your own Zapier catch-hook URL and/or
-        HubSpot private-app token and the "Route to BDR"-style actions actually fire: a real webhook delivery, a real Contact + Deal
-        created in your HubSpot portal. Those two stay gated behind your own credentials, since they write to services outside this site.
+        Every row above marked <span class="live-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--good);margin:0 2px"></span> is one click away, on any account's detail page — not just described here.
       </div>
     </div>
 
