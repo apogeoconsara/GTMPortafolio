@@ -1191,6 +1191,21 @@ function renderAccountDetail(id) {
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h2>Run live AI reasoning (OpenAI)</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
+      <div class="body-pad">
+        <div class="claude-live-box">
+          <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Calls a real OpenAI model (gpt-4o-mini) for this account's reasoning step, through a Netlify Function that holds the site owner's own API key server-side — no credential needed from you. Scoring and routing above stay deterministic either way.</p>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn primary small" id="run-live-btn">Run live OpenAI call</button>
+            ${isLive ? '<button class="btn small" id="revert-live-btn">Revert to simulated</button>' : ''}
+          </div>
+          <div class="claude-status" id="claude-status"></div>
+          ${LIVE_REASONING_META[id] ? `<div class="claude-status" style="color:var(--muted)">Model ${esc(LIVE_REASONING_META[id].model)} · ${LIVE_REASONING_META[id].total_tokens} tokens (${LIVE_REASONING_META[id].prompt_tokens} in / ${LIVE_REASONING_META[id].completion_tokens} out) · ${LIVE_REASONING_META[id].latency_ms}ms · ~$${LIVE_REASONING_META[id].estimated_cost_usd.toFixed(6)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>Agent run</h2><span class="hint">ENGINE = deterministic code · AGENT = model output · GATE = branch point</span></div>
       <div class="body-pad">
         ${a.agentRun.map(s => `
@@ -1300,21 +1315,6 @@ function renderAccountDetail(id) {
               <ul>
                 ${a.whyJumpCloud.map(w => `<li><b>${esc(w.attr)}</b> — ${esc(w.link)}</li>`).join("")}
               </ul>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h2>Run live AI reasoning (OpenAI)</h2><span class="hint">optional — replaces this account's AI interpretation only</span></div>
-          <div class="body-pad">
-            <div class="claude-live-box">
-              <p style="margin:0 0 8px;color:var(--muted);font-size:12.5px">Calls a real OpenAI model (gpt-4o-mini) for this account's reasoning step, through a Netlify Function that holds the site owner's own API key server-side — no credential needed from you. Scoring and routing above stay deterministic either way.</p>
-              <div style="display:flex;gap:10px;align-items:center">
-                <button class="btn primary small" id="run-live-btn">Run live OpenAI call</button>
-                ${isLive ? '<button class="btn small" id="revert-live-btn">Revert to simulated</button>' : ''}
-              </div>
-              <div class="claude-status" id="claude-status"></div>
-              ${LIVE_REASONING_META[id] ? `<div class="claude-status" style="color:var(--muted)">Model ${esc(LIVE_REASONING_META[id].model)} · ${LIVE_REASONING_META[id].total_tokens} tokens (${LIVE_REASONING_META[id].prompt_tokens} in / ${LIVE_REASONING_META[id].completion_tokens} out) · ${LIVE_REASONING_META[id].latency_ms}ms · ~$${LIVE_REASONING_META[id].estimated_cost_usd.toFixed(6)}</div>` : ''}
             </div>
           </div>
         </div>
