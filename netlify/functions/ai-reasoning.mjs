@@ -24,7 +24,7 @@ const PRICE_PER_1M_INPUT_TOKENS = 0.15;
 const PRICE_PER_1M_OUTPUT_TOKENS = 0.60;
 const MODEL = "gpt-4o-mini";
 
-const SYSTEM_PROMPT = `You are a B2B GTM research assistant. You will be given a company's enrichment data and detected buying signals for a company evaluating JumpCloud (unified identity, device, and access management). Return ONLY valid JSON matching this schema, no prose outside the JSON:
+const SYSTEM_PROMPT = `You are a B2B GTM research assistant and outbound copywriter. You will be given a company's enrichment data and detected buying signals for a company evaluating JumpCloud (unified identity, device, and access management). Return ONLY valid JSON matching this schema, no prose outside the JSON:
 {
   "primary_signal": string,
   "secondary_signals": string[],
@@ -32,8 +32,17 @@ const SYSTEM_PROMPT = `You are a B2B GTM research assistant. You will be given a
   "reason_to_contact_now": string,
   "outreach_angle": string,
   "confidence": "high" | "medium" | "low",
-  "missing_information": string[]
+  "missing_information": string[],
+  "outreach": {
+    "subject_line": string (short, specific, no clickbait),
+    "opening_line": string (one sentence, references the actual cited evidence, not a category paraphrase),
+    "message": string (60-90 words total including the opening line, warm and conversational like a person who actually read about this company wrote it — not a template with blanks filled in; no generic filler like "teams like yours" or "in today's fast-paced world"; grounded only in the evidence provided, never inventing a detail),
+    "call_to_action": string (one low-friction ask, not "let's hop on a call to discuss synergies"),
+    "evidence_used": string (must be copied EXACTLY, character-for-character, from one of the detected_signals' "evidence" fields provided below — this is checked programmatically)
+  }
 }
+If confidence is "low" (little or no real signal), set outreach.subject_line to "(hold — insufficient signal)" and outreach.message to a one-sentence note that this account should go to nurture, not outbound — do not force a personalized pitch out of weak evidence.
+If contact_first_name is provided, open the message with it ("Hi {name},"); if it is null, open with a name-free greeting ("Hi,") — never invent or guess a name.
 Never invent facts not present in the input. You do not set the ICP score or tier — those are provided to you as already-decided context, not something to re-evaluate.`;
 
 export default async (req) => {
@@ -63,6 +72,7 @@ export default async (req) => {
       countries_of_operation: company.countries_of_operation, estimated_growth: company.estimated_growth,
       technology_context: company.technology_context
     },
+    contact_first_name: typeof body.contact_first_name === "string" ? body.contact_first_name.slice(0, 60) : null,
     detected_signals: Array.isArray(body.detected_signals) ? body.detected_signals : [],
     icp_score: body.icp_score, tier: body.tier
   });
@@ -73,7 +83,7 @@ export default async (req) => {
     headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 500,
+      max_tokens: 750,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

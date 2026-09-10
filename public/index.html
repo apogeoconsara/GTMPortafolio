@@ -499,8 +499,8 @@ function detectSignals(c) {
     });
 
   push("Remote or distributed workforce", c.remote_or_hybrid_signal,
-    c.remote_or_hybrid_signal ? `Workforce flagged remote/hybrid — ${c.technology_context}` : "No remote/hybrid indicator on file",
-    c.remote_or_hybrid_signal ? "high" : "n/a", "enrichment.remote_or_hybrid_signal");
+    c.remote_or_hybrid_signal ? `Distributed/remote workforce noted in company research — ${c.company_description}` : "No remote/hybrid indicator on file",
+    c.remote_or_hybrid_signal ? "high" : "n/a", "enrichment.company_description");
 
   push("IT hiring", c.it_hiring_signal,
     c.it_hiring_signal ? `Open or recent IT req referenced in tech context: "${c.technology_context}"` : "No open IT req detected",
@@ -661,17 +661,54 @@ function generateAIReasoning(c, signals, score) {
 // ---------------------------------------------------------------------------
 // PHASE 7 — PERSONALIZED OUTREACH (<= ~80 words)
 // ---------------------------------------------------------------------------
+// Evidence strings from detectSignals() are pre-labeled, e.g.
+// `Security/IAM hiring or initiative referenced: "Open req found via Clay
+// for ..."`. Quoting the whole thing again in outreach copy nests the label
+// inside a second label ("saw this: Security/IAM hiring... referenced:
+// ..."). This strips one leading "Label —" / "Label:" prefix so the message
+// quotes the underlying fact instead of the internal citation label.
+function stripEvidenceLabel(evidenceText) {
+  const m = /^[^:—]{0,60}[:—]\s*(.*)$/s.exec(evidenceText || "");
+  let fact = (m ? m[1] : evidenceText || "").trim();
+  // A few company_description clauses carry this demo's own ICP-scoring
+  // commentary (e.g. "headcount exceeds this demo's 2,000-employee
+  // ceiling") — never let that leak into text meant to read like real
+  // outreach copy written to a real contact.
+  fact = fact.split(/;\s*/).filter(clause => !/this demo/i.test(clause)).join("; ");
+  return fact.replace(/\.+\s*$/, "").trim(); // caller adds its own trailing period
+}
+
 function generateOutreach(c, signals, reasoning, persona) {
   const primary = reasoning.primary_signal;
   const evidence = signals.find(s => s.signal_name === primary)?.evidence || "";
   if (reasoning.confidence === "low") {
     return { subject_line: "(hold — insufficient signal)", opening_line: "—", message: "Not enough evidence to justify a personalized outreach angle for this account yet — recommend nurture over outbound.", call_to_action: "—", evidence_used: "none" };
   }
-  const subject = `${c.company_name}: identity/device question`;
-  const opening = `Noticed ${c.company_name} ${primary.toLowerCase().includes("hiring") ? "has an open IT/security req" : primary.toLowerCase().includes("remote") ? "runs a distributed team" : "is expanding across " + c.countries_of_operation.join("/")}.`;
-  const message = `${opening} Teams in that spot often end up managing devices and access across too many disconnected tools once headcount or geography outpaces the original setup. Curious whether that's on ${persona.persona.toLowerCase()}'s radar at ${c.company_name} right now, or if it's already handled.`;
-  const cta = "Worth a 15-minute conversation to compare notes?";
-  return { subject_line: subject, opening_line: opening, message, call_to_action: cta, evidence_used: evidence };
+  const p = primary.toLowerCase();
+  const firstName = c.contact.name !== "unknown" ? c.contact.name.split(" ")[0] : null;
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const fact = stripEvidenceLabel(evidence);
+
+  // Ground the opener in the literal cited fact where there is one — "saw
+  // the actual req/quote" reads as researched; a paraphrase of the signal
+  // category reads as a mail-merge.
+  let hook;
+  if (p.includes("hiring")) {
+    hook = fact ? `saw this at ${c.company_name}: ${fact}` : `saw ${c.company_name} is hiring for IT/security`;
+  } else if (p.includes("remote") || p.includes("distributed")) {
+    hook = fact ? `came across this from ${c.company_name}'s own team: ${fact}` : `noticed ${c.company_name} runs a distributed team`;
+  } else if (p.includes("expansion") || p.includes("countries") || p.includes("offices")) {
+    hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries — ${c.countries_of_operation.join(", ")}`;
+  } else if (p.includes("growth")) {
+    hook = `saw ${c.company_name} is growing fast — ${c.estimated_growth}`;
+  } else {
+    hook = `came across ${c.company_name}`;
+  }
+
+  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. Teams scaling or spreading out that fast usually end up managing devices and access across a pile of disconnected tools before anyone officially owns it. Curious if that's already on someone's plate at ${c.company_name}, or still nobody's job yet.`;
+  const subject = `${c.company_name} + identity/device access`;
+  const cta = "Worth 15 minutes to compare notes — no deck, just a conversation?";
+  return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
 
 // ---------------------------------------------------------------------------
@@ -918,6 +955,7 @@ async function callOpenAILive(c, signals, score) {
       company: { name: c.company_name, industry: c.industry, employee_count: c.employee_count,
         countries_of_operation: c.countries_of_operation, estimated_growth: c.estimated_growth,
         technology_context: c.technology_context },
+      contact_first_name: c.contact.name !== "unknown" ? c.contact.name.split(" ")[0] : null,
       detected_signals: signals.filter(s => s.detected).map(s => ({ name: s.signal_name, evidence: s.evidence, confidence: s.confidence })),
       icp_score: score.total_score, tier: score.tier
     })
@@ -1488,7 +1526,14 @@ function renderAccountDetail(id) {
       const { reasoning, meta } = await callOpenAILive(c, a.signals, a.score);
       LIVE_REASONING_OVERRIDES[id] = reasoning;
       LIVE_REASONING_META[id] = meta;
-      const liveOutreach = generateOutreach(c, a.signals, reasoning, a.persona);
+      // Prefer the outreach GPT drafted itself (grounded in the same cited
+      // evidence, written as prose rather than a filled-in template) — fall
+      // back to the deterministic generator only if the model's response is
+      // missing that field, so a malformed live response never breaks this
+      // panel instead of degrading it.
+      const liveOutreach = (reasoning.outreach && reasoning.outreach.message)
+        ? reasoning.outreach
+        : generateOutreach(c, a.signals, reasoning, a.persona);
       LIVE_OUTREACH_OVERRIDES[id] = liveOutreach;
       LIVE_QA_OVERRIDES[id] = qaCheckOutreach(a.signals, liveOutreach, reasoning);
       LIVE_AI_SPEND_USD += meta.estimated_cost_usd;
