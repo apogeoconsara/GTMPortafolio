@@ -792,6 +792,15 @@ function qaCheckOutreach(signals, outreach, reasoning) {
 // ---------------------------------------------------------------------------
 const LIVE_REASONING_OVERRIDES = {}; // accountId -> reasoning object from OpenAI
 const LIVE_REASONING_META = {}; // accountId -> { model, tokens, latency_ms, estimated_cost_usd }
+// The live OpenAI call only ever returns the reasoning JSON (see
+// netlify/functions/ai-reasoning.mjs) — it never drafts outreach copy
+// itself. To keep the "Generated outreach" panel honest once a viewer
+// triggers live reasoning, the SAME deterministic outreach/QA engine used
+// everywhere else in this app is re-run locally against the live reasoning
+// output, so the personalization on screen actually reflects what GPT said
+// instead of silently staying frozen on the original simulated draft.
+const LIVE_OUTREACH_OVERRIDES = {}; // accountId -> outreach object, regenerated from live reasoning
+const LIVE_QA_OVERRIDES = {}; // accountId -> qa object, regenerated from live reasoning
 let LIVE_AI_SPEND_USD = 0;
 let LIVE_AI_CALL_COUNT = 0;
 
@@ -1200,6 +1209,9 @@ function renderAccountDetail(id) {
   const a = ACCOUNTS.find(x => x.enriched.company_name === c.company_name);
   const r = LIVE_REASONING_OVERRIDES[id] || a.ai_reasoning;
   const isLive = !!LIVE_REASONING_OVERRIDES[id];
+  const outreach = LIVE_OUTREACH_OVERRIDES[id] || a.outreach;
+  const qa = LIVE_QA_OVERRIDES[id] || a.qa;
+  const agentRun = isLive ? buildAgentRun(c, a.signals, a.score, r, a.persona, outreach, qa, a.routing) : a.agentRun;
   const modelEval = getModelEval(id);
 
   const wrap = el(`<div>
@@ -1253,7 +1265,7 @@ function renderAccountDetail(id) {
     <div class="panel">
       <div class="panel-head"><h2>Agent run</h2><span class="hint">ENGINE = deterministic code · AGENT = model output · GATE = branch point</span></div>
       <div class="body-pad">
-        ${a.agentRun.map(s => `
+        ${agentRun.map(s => `
           <div class="run-step">
             <span class="badge ${s.type}">${s.type.toUpperCase()}</span>
             <div>
@@ -1331,14 +1343,14 @@ function renderAccountDetail(id) {
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>Generated outreach</h2></div>
+          <div class="panel-head"><h2>Generated outreach${isLive ? ' <span style="color:var(--good)">· regenerated from live OpenAI reasoning</span>' : ''}</h2></div>
           <div class="body-pad">
             <div class="outreach-card">
-              <div class="subj">${esc(a.outreach.subject_line)}</div>
-              <div>${esc(a.outreach.message)}</div>
-              <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(a.outreach.call_to_action)}</div>
+              <div class="subj">${esc(outreach.subject_line)}</div>
+              <div>${esc(outreach.message)}</div>
+              <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(outreach.call_to_action)}</div>
             </div>
-            <div style="margin-top:10px;font-size:12.5px;${a.qa.passed ? 'color:var(--good)' : 'color:var(--bad)'}">${a.qa.passed ? '✓ QA passed' : '✗ QA failed'} — ${esc(a.qa.note)}</div>
+            <div style="margin-top:10px;font-size:12.5px;${qa.passed ? 'color:var(--good)' : 'color:var(--bad)'}">${qa.passed ? '✓ QA passed' : '✗ QA failed'} — ${esc(qa.note)}</div>
             <div class="eval-row" id="eval-outreach">
               <span class="eval-label">Would you send this as-is?</span>
               <button class="btn small eval-btn${modelEval.outreach === "approved" ? " active" : ""}" data-judgment="approved">Approve</button>
@@ -1476,6 +1488,9 @@ function renderAccountDetail(id) {
       const { reasoning, meta } = await callOpenAILive(c, a.signals, a.score);
       LIVE_REASONING_OVERRIDES[id] = reasoning;
       LIVE_REASONING_META[id] = meta;
+      const liveOutreach = generateOutreach(c, a.signals, reasoning, a.persona);
+      LIVE_OUTREACH_OVERRIDES[id] = liveOutreach;
+      LIVE_QA_OVERRIDES[id] = qaCheckOutreach(a.signals, liveOutreach, reasoning);
       LIVE_AI_SPEND_USD += meta.estimated_cost_usd;
       LIVE_AI_CALL_COUNT += 1;
       logHealth("AI Reasoning (OpenAI)", c.company_name, "success", `${meta.total_tokens} tokens, ~$${meta.estimated_cost_usd.toFixed(6)}.`, meta.latency_ms ?? (Date.now() - startedAt));
@@ -1488,7 +1503,7 @@ function renderAccountDetail(id) {
     }
   });
   const revertBtn = wrap.querySelector("#revert-live-btn");
-  if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; delete LIVE_REASONING_META[id]; openAccount(id); });
+  if (revertBtn) revertBtn.addEventListener("click", () => { delete LIVE_REASONING_OVERRIDES[id]; delete LIVE_REASONING_META[id]; delete LIVE_OUTREACH_OVERRIDES[id]; delete LIVE_QA_OVERRIDES[id]; openAccount(id); });
 
   const orchStatus = wrap.querySelector("#orch-status");
   wrap.querySelector("#fire-zapier-btn").addEventListener("click", async () => {
