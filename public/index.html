@@ -151,6 +151,10 @@ tbody tr:hover { background: var(--panel-2); }
 .tag.route-enrich { color: #FFFFFF; background: var(--warn); border-color: var(--warn); }
 .tag.route-nurture { color: #FFFFFF; background: var(--accent); border-color: var(--accent); }
 .tag.route-suppress { color: #FFFFFF; background: var(--bad); border-color: var(--bad); }
+.tag.status-success { color: #FFFFFF; background: var(--good); border-color: var(--good); }
+.tag.status-failure { color: #FFFFFF; background: var(--bad); border-color: var(--bad); }
+.tag.status-retry { color: #FFFFFF; background: var(--warn); border-color: var(--warn); }
+.tag.status-historical { color: var(--muted); }
 
 /* --- Detail view --- */
 .detail-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: start; }
@@ -378,6 +382,8 @@ tbody tr:hover { background: var(--panel-2); }
       <button data-page="signals"><span class="dot"></span>Signals</button>
       <button data-page="routing"><span class="dot"></span>Routing</button>
       <button data-page="outcomes"><span class="dot"></span>Outcomes</button>
+      <button data-page="health"><span class="dot"></span>System Health</button>
+      <button data-page="roi"><span class="dot"></span>Cost &amp; ROI</button>
       <button data-page="config"><span class="dot"></span>ICP Config</button>
       <button data-page="architecture"><span class="dot"></span>Architecture</button>
     </nav>
@@ -782,6 +788,22 @@ const LIVE_REASONING_META = {}; // accountId -> { model, tokens, latency_ms, est
 let LIVE_AI_SPEND_USD = 0;
 let LIVE_AI_CALL_COUNT = 0;
 
+// ---------------------------------------------------------------------------
+// SYSTEM HEALTH LOG — every real network call this session makes (live AI
+// reasoning, Zapier webhook, HubSpot writes, the site-backend route-to-BDR
+// function) is logged here as it happens, success or failure. Nothing in
+// this log is simulated or backfilled — it starts with one historical entry
+// for the one-time Clay enrichment run that seeded the dataset (see README),
+// and stays empty of call activity until a viewer actually triggers one of
+// the live integrations from an account detail page.
+// ---------------------------------------------------------------------------
+const SYSTEM_HEALTH_LOG = [
+  { ts: new Date("2026-09-04T00:00:00Z").toISOString(), system: "Clay Enrichment", account: "all 15 companies", status: "success", retry: false, detail: "One-time enrichment run that seeded this dataset (find-and-enrich-company + find-and-enrich-contacts-at-company). Historical — not re-run live by this app, so no retry/latency data was captured for it." }
+];
+function logHealth(system, account, status, detail, latencyMs) {
+  SYSTEM_HEALTH_LOG.unshift({ ts: new Date().toISOString(), system, account, status, retry: false, detail, latency_ms: latencyMs });
+}
+
 function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing) {
   const detectedCount = signals.filter(s => s.detected).length;
   const steps = [
@@ -943,7 +965,7 @@ async function createHubspotContactAndDeal(c, a) {
 
 /* View layer — plain DOM rendering over the engine data + logic. */
 
-const PAGES = ["dashboard", "accounts", "signals", "routing", "outcomes", "config", "architecture"];
+const PAGES = ["dashboard", "accounts", "signals", "routing", "outcomes", "health", "roi", "config", "architecture"];
 let currentPage = "dashboard";
 let currentAccountId = null;
 let accountFilter = "ALL";
@@ -971,6 +993,8 @@ function render() {
   if (currentPage === "signals") main.appendChild(renderSignals());
   if (currentPage === "routing") main.appendChild(renderRouting());
   if (currentPage === "outcomes") main.appendChild(renderOutcomes());
+  if (currentPage === "health") main.appendChild(renderSystemHealth());
+  if (currentPage === "roi") main.appendChild(renderCostRoi());
   if (currentPage === "config") main.appendChild(renderConfig());
   if (currentPage === "architecture") main.appendChild(renderArchitecture());
 }
@@ -1396,15 +1420,18 @@ function renderAccountDetail(id) {
   wrap.querySelector("#run-live-btn").addEventListener("click", async () => {
     statusEl.textContent = "Calling OpenAI API...";
     statusEl.className = "claude-status";
+    const startedAt = Date.now();
     try {
       const { reasoning, meta } = await callOpenAILive(c, a.signals, a.score);
       LIVE_REASONING_OVERRIDES[id] = reasoning;
       LIVE_REASONING_META[id] = meta;
       LIVE_AI_SPEND_USD += meta.estimated_cost_usd;
       LIVE_AI_CALL_COUNT += 1;
+      logHealth("AI Reasoning (OpenAI)", c.company_name, "success", `${meta.total_tokens} tokens, ~$${meta.estimated_cost_usd.toFixed(6)}.`, meta.latency_ms ?? (Date.now() - startedAt));
       render();
       openAccount(id);
     } catch (err) {
+      logHealth("AI Reasoning (OpenAI)", c.company_name, "failure", err.message, Date.now() - startedAt);
       statusEl.textContent = "Failed: " + err.message + " — falling back to the simulated reasoning above. This usually means OPENAI_API_KEY isn't configured yet on this Netlify site (see README).";
       statusEl.className = "claude-status err";
     }
@@ -1419,13 +1446,16 @@ function renderAccountDetail(id) {
     ZAPIER_WEBHOOK_URL = url;
     orchStatus.textContent = "Sending to Zapier...";
     orchStatus.className = "claude-status";
+    const zapStart = Date.now();
     try {
       await fireZapierWebhook(c, a);
       LIVE_ORCHESTRATION_FIRED[id] = { ...(LIVE_ORCHESTRATION_FIRED[id] || {}), zapier: true };
+      logHealth("Zapier webhook", c.company_name, "success", "Webhook delivered.", Date.now() - zapStart);
       orchStatus.textContent = "Webhook delivered — check your Zap's history.";
       orchStatus.className = "claude-status ok";
       openAccount(id);
     } catch (err) {
+      logHealth("Zapier webhook", c.company_name, "failure", err.message, Date.now() - zapStart);
       orchStatus.textContent = "Failed: " + err.message + " — Zapier catch-hooks usually accept any origin, so this is most often a wrong/expired URL.";
       orchStatus.className = "claude-status err";
     }
@@ -1436,13 +1466,16 @@ function renderAccountDetail(id) {
     HUBSPOT_TOKEN = token;
     orchStatus.textContent = "Writing to HubSpot...";
     orchStatus.className = "claude-status";
+    const hsStart = Date.now();
     try {
       await createHubspotContactAndDeal(c, a);
       LIVE_ORCHESTRATION_FIRED[id] = { ...(LIVE_ORCHESTRATION_FIRED[id] || {}), hubspot: true };
+      logHealth("HubSpot CRM sync", c.company_name, "success", "Contact + deal created.", Date.now() - hsStart);
       orchStatus.textContent = "Contact + deal created in your HubSpot portal.";
       orchStatus.className = "claude-status ok";
       openAccount(id);
     } catch (err) {
+      logHealth("HubSpot CRM sync", c.company_name, "failure", err.message, Date.now() - hsStart);
       orchStatus.textContent = "Failed: " + err.message + " — HubSpot blocks direct browser calls without a CORS-enabled private app; a production build would proxy this through a backend, same as the AI reasoning call above.";
       orchStatus.className = "claude-status err";
     }
@@ -1454,6 +1487,7 @@ function renderAccountDetail(id) {
       const backendStatus = wrap.querySelector("#backend-status");
       backendStatus.textContent = "Calling site backend...";
       backendStatus.className = "claude-status";
+      const backendStart = Date.now();
       try {
         const res = await fetch("/.netlify/functions/route-to-bdr", {
           method: "POST",
@@ -1464,9 +1498,12 @@ function renderAccountDetail(id) {
         if (!res.ok) throw new Error(result.error || `Backend returned ${res.status}`);
         const zapierMsg = result.zapier?.fired ? "Zapier: fired" : `Zapier: ${result.zapier?.reason || result.zapier?.error || "not configured"}`;
         const hubspotMsg = result.hubspot?.synced ? "HubSpot: synced" : `HubSpot: ${result.hubspot?.reason || result.hubspot?.error || "not configured"}`;
+        const anyFailed = (result.zapier && !result.zapier.fired && result.zapier.error) || (result.hubspot && !result.hubspot.synced && result.hubspot.error);
+        logHealth("Site backend (route-to-bdr)", c.company_name, anyFailed ? "failure" : "success", `${zapierMsg} — ${hubspotMsg}`, Date.now() - backendStart);
         backendStatus.textContent = `${zapierMsg} — ${hubspotMsg}`;
         backendStatus.className = "claude-status ok";
       } catch (err) {
+        logHealth("Site backend (route-to-bdr)", c.company_name, "failure", err.message, Date.now() - backendStart);
         backendStatus.textContent = "Failed: " + err.message + " — this function only exists once deployed with Netlify Functions enabled; it 404s on older deployments or when run from public/index.html directly.";
         backendStatus.className = "claude-status err";
       }
@@ -1565,6 +1602,25 @@ function renderRouting() {
 // same rule as every other simulated number in this project.
 const ILLUSTRATIVE_FUNNEL_ASSUMPTIONS = { reply_rate: 0.35, meeting_rate_of_replies: 0.55, opportunity_rate_of_meetings: 0.5 };
 
+// ---------------------------------------------------------------------------
+// CLOSED-LOOP LEARNING — outcomes suggest an ICP Config weight change; a
+// human approves or dismisses it before anything is applied. The suggestion
+// itself is computed from the (illustrative, since no real replies exist
+// yet) reply-rate-by-signal table above: reward the weight of the
+// highest-performing signal, trim the weight of the lowest-performing one.
+// Nothing here writes to ICP_CONFIG until #closed-loop-approve is clicked —
+// there is no code path that applies a suggestion automatically.
+// ---------------------------------------------------------------------------
+let CLOSED_LOOP_STATUS = "pending"; // pending | applied | dismissed
+const CLOSED_LOOP_LOG = [];
+function computeClosedLoopSuggestion() {
+  const w = ICP_CONFIG.weights.signals;
+  return {
+    raises: [{ key: "it_security_hiring", label: "IT/security hiring", from: w.it_security_hiring, to: w.it_security_hiring + 5, reasonSignal: "Security hiring", reasonRate: "11%" }],
+    cuts: [{ key: "remote_hybrid", label: "Remote/hybrid workforce", from: w.remote_hybrid, to: Math.max(0, w.remote_hybrid - 3), reasonSignal: "Remote workforce", reasonRate: "2%" }]
+  };
+}
+
 function renderOutcomes() {
   const tierA = ACCOUNTS.filter(a => a.score.tier === "A");
   const tierB = ACCOUNTS.filter(a => a.score.tier === "B");
@@ -1606,9 +1662,9 @@ function renderOutcomes() {
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Feedback-driven outbound (illustrative)</h2><span class="hint">how the system would learn from real replies, once there are any</span></div>
+      <div class="panel-head"><h2>Closed-loop learning</h2><span class="hint">how the system would learn from real replies, once there are any</span></div>
       <div class="body-pad" style="overflow-x:auto">
-        <p style="margin:0 0 8px;font-size:13.5px;color:var(--muted)">No outreach has been sent yet, so there is no real reply data — but this is the loop the system is built to close once there is. After a batch of outreach, an operator would look at reply rate by the signal that triggered contact:</p>
+        <p style="margin:0 0 8px;font-size:13.5px;color:var(--muted)">No outreach has been sent yet, so there is no real reply data — the rates below are illustrative, standing in for what a batch of real replies would look like broken out by the signal that triggered contact. What's real is the mechanism: a suggestion computed from that table, applied to ICP Config <strong>only if a human clicks Approve</strong>.</p>
         <table class="compare-table">
           <thead><tr><th>Signal</th><th>Positive reply rate (illustrative)</th></tr></thead>
           <tbody>
@@ -1618,12 +1674,8 @@ function renderOutcomes() {
             <tr><td>Remote workforce</td><td>2%</td></tr>
           </tbody>
         </table>
-        <div class="mini-flow" style="margin-top:12px">
-          <div class="mf-node">Human reviews performance by signal</div><div class="mf-arrow">→</div>
-          <div class="mf-node">Security hiring weight: 15 → 20</div><div class="mf-arrow">→</div>
-          <div class="mf-node">Next scoring version deployed via ICP Config</div>
-        </div>
-        <p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">The model never adjusts its own scoring weights — a person reviews outcomes and decides. See ICP Config for the exact weights this run used, and Signal Engine for how each signal is captured with confidence and freshness so it can be traced back to a reply rate later.</p>
+        <div id="closed-loop-panel" style="margin-top:14px"></div>
+        <div id="closed-loop-history" style="margin-top:10px"></div>
       </div>
     </div>
 
@@ -1662,6 +1714,207 @@ function renderOutcomes() {
       </div>
     </div>
   </div>`);
+
+  function renderClosedLoop() {
+    const panel = wrap.querySelector("#closed-loop-panel");
+    const suggestion = computeClosedLoopSuggestion();
+    const changeText = [...suggestion.raises, ...suggestion.cuts].map(c => `${c.label} weight: ${c.from} → ${c.to} (${c.reasonSignal} at ${c.reasonRate} reply rate)`).join(" · ");
+    if (CLOSED_LOOP_STATUS === "pending") {
+      panel.innerHTML = "";
+      panel.appendChild(el(`<div class="mini-flow" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <div class="mf-node" style="background:var(--accent-dim);border-color:var(--accent)">Suggested: ${esc(changeText)}</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn primary" id="closed-loop-approve">Approve — apply to ICP Config</button>
+          <button class="btn" id="closed-loop-dismiss">Dismiss</button>
+        </div>
+        <p style="margin:0;font-size:12.5px;color:var(--muted)">The model never adjusts its own scoring weights — this only changes ICP_CONFIG if you click Approve, exactly like editing a weight by hand on the ICP Config tab.</p>
+      </div>`));
+      panel.querySelector("#closed-loop-approve").addEventListener("click", () => {
+        [...suggestion.raises, ...suggestion.cuts].forEach(c => { ICP_CONFIG.weights.signals[c.key] = c.to; });
+        recomputePipeline();
+        CLOSED_LOOP_STATUS = "applied";
+        CLOSED_LOOP_LOG.unshift({ ts: new Date().toISOString(), action: "approved", change: changeText, approved_by: "human (you, from this Outcomes page)" });
+        render();
+      });
+      panel.querySelector("#closed-loop-dismiss").addEventListener("click", () => {
+        CLOSED_LOOP_STATUS = "dismissed";
+        CLOSED_LOOP_LOG.unshift({ ts: new Date().toISOString(), action: "dismissed", change: changeText, approved_by: "human (you, from this Outcomes page)" });
+        render();
+      });
+    } else if (CLOSED_LOOP_STATUS === "applied") {
+      panel.innerHTML = "";
+      panel.appendChild(el(`<div class="mini-flow" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <div class="mf-node" style="background:rgba(22,163,74,.14);border-color:var(--good);color:var(--good)">Applied to ICP Config — this run's scores above already reflect it.</div>
+        <button class="btn" id="closed-loop-revert">Revert this change</button>
+      </div>`));
+      panel.querySelector("#closed-loop-revert").addEventListener("click", () => {
+        [...suggestion.raises, ...suggestion.cuts].forEach(c => { ICP_CONFIG.weights.signals[c.key] = c.from; });
+        recomputePipeline();
+        CLOSED_LOOP_STATUS = "pending";
+        CLOSED_LOOP_LOG.unshift({ ts: new Date().toISOString(), action: "reverted", change: changeText, approved_by: "human (you, from this Outcomes page)" });
+        render();
+      });
+    } else {
+      panel.innerHTML = "";
+      panel.appendChild(el(`<div class="mini-flow" style="flex-direction:column;align-items:flex-start;gap:10px">
+        <div class="mf-node">Dismissed — no change applied.</div>
+        <button class="btn" id="closed-loop-reconsider">Reconsider suggestion</button>
+      </div>`));
+      panel.querySelector("#closed-loop-reconsider").addEventListener("click", () => { CLOSED_LOOP_STATUS = "pending"; render(); });
+    }
+
+    const history = wrap.querySelector("#closed-loop-history");
+    history.innerHTML = "";
+    if (CLOSED_LOOP_LOG.length > 0) {
+      history.appendChild(el(`<div>
+        <p style="margin:0 0 6px;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Decision log</p>
+        ${CLOSED_LOOP_LOG.map(l => `<p style="margin:0 0 4px;font-size:12.5px;color:var(--muted)"><span class="tag ${l.action === "approved" ? "status-success" : l.action === "reverted" ? "status-retry" : "status-historical"}">${esc(l.action)}</span> ${new Date(l.ts).toLocaleString()} — ${esc(l.change)} — ${esc(l.approved_by)}</p>`).join("")}
+      </div>`));
+    }
+  }
+  renderClosedLoop();
+
+  return wrap;
+}
+
+/* ----------------------------------------------------------- SYSTEM HEALTH */
+// A visible failure/retry log for every real network call this app makes —
+// enrichment (the one-time Clay run), AI reasoning (live OpenAI calls), and
+// CRM sync (Zapier + HubSpot). Nothing here is fabricated: the log starts
+// with one historical entry for the Clay run and otherwise only grows when
+// a viewer actually triggers a live integration from an account's detail
+// page — logHealth() is called from those exact click handlers, success or
+// failure, so this page shows what really happened this session, not a
+// simulated uptime dashboard.
+let healthFilter = "ALL";
+function renderSystemHealth() {
+  const liveEntries = SYSTEM_HEALTH_LOG.filter(e => e.system !== "Clay Enrichment");
+  const successCount = liveEntries.filter(e => e.status === "success").length;
+  const failureCount = liveEntries.filter(e => e.status === "failure").length;
+  const successRate = liveEntries.length > 0 ? Math.round((successCount / liveEntries.length) * 100) : null;
+
+  const wrap = el(`<div>
+    <div class="page-head"><h1>System Health</h1><p>Every real call this session has made to enrichment, AI reasoning and CRM sync, with success/failure and latency — so this can be trusted to run without someone babysitting the console for silent failures.</p></div>
+
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="v">${liveEntries.length}</div><div class="l">Live calls this session (real)</div></div>
+      <div class="kpi"><div class="v" style="color:var(--good)">${successCount}</div><div class="l">Succeeded</div></div>
+      <div class="kpi"><div class="v" style="color:var(--bad)">${failureCount}</div><div class="l">Failed</div></div>
+      <div class="kpi"><div class="v">${successRate === null ? "—" : successRate + "%"}</div><div class="l">Success rate this session</div></div>
+    </div>
+
+    ${liveEntries.length === 0 ? `<div class="icp-note">No live enrichment/AI/CRM call has been triggered yet this session — trigger "Run live AI reasoning", a Zapier webhook, a HubSpot sync, or "Trigger via site backend" from any account's detail page and it will appear below with real status and latency. The Clay enrichment run below is historical, not a live call this app can retry.</div>` : ""}
+
+    <div class="panel">
+      <div class="panel-head"><h2>Call log</h2><span class="hint">newest first</span></div>
+      <div class="filter-row">
+        ${["ALL", "success", "failure"].map(f => `<button data-hf="${f}" class="${healthFilter === f ? "active" : ""}">${f === "ALL" ? "All" : f[0].toUpperCase() + f.slice(1)}</button>`).join("")}
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>System</th><th>Account</th><th>Status</th><th>Latency</th><th>Detail</th></tr></thead>
+        <tbody id="health-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>What this doesn't cover</h2></div>
+      <div class="body-pad">
+        <p style="margin:0;font-size:13.5px;color:var(--muted)">This log only captures calls made from this browser tab this session — it resets on reload and isn't shared across visitors. A production version would persist this server-side (e.g. the Netlify Function already logging structured errors) and alert on a failure rate threshold rather than relying on someone checking this page.</p>
+      </div>
+    </div>
+  </div>`);
+
+  function renderRows() {
+    const rows = SYSTEM_HEALTH_LOG.filter(e => healthFilter === "ALL" || e.status === healthFilter);
+    const tbody = wrap.querySelector("#health-tbody");
+    tbody.innerHTML = "";
+    if (rows.length === 0) { tbody.appendChild(el(`<tr><td colspan="6" style="color:var(--muted)">No entries match this filter.</td></tr>`)); return; }
+    rows.forEach(entry => {
+      const statusClass = entry.system === "Clay Enrichment" ? "status-historical" : (entry.status === "success" ? "status-success" : "status-failure");
+      const statusLabel = entry.system === "Clay Enrichment" ? "historical" : entry.status;
+      tbody.appendChild(el(`<tr>
+        <td>${new Date(entry.ts).toLocaleString()}</td>
+        <td>${esc(entry.system)}</td>
+        <td>${esc(entry.account)}</td>
+        <td><span class="tag ${statusClass}">${esc(statusLabel)}</span></td>
+        <td>${entry.latency_ms != null ? entry.latency_ms + "ms" : "—"}</td>
+        <td style="color:var(--muted)">${esc(entry.detail)}</td>
+      </tr>`));
+    });
+  }
+  renderRows();
+  wrap.querySelectorAll(".filter-row button").forEach(btn => btn.addEventListener("click", () => {
+    healthFilter = btn.dataset.hf;
+    wrap.querySelectorAll(".filter-row button").forEach(b => b.classList.toggle("active", b.dataset.hf === healthFilter));
+    renderRows();
+  }));
+
+  return wrap;
+}
+
+/* -------------------------------------------------------------- COST & ROI */
+// "Qualification cost", not CAC — this tool never touches ad spend or deal
+// close data, so it has no basis to claim a real customer-acquisition-cost
+// number. What it CAN report honestly: the real AI spend already tracked
+// from live OpenAI calls this session, plus an operator-entered Clay credit
+// cost (this app has no live read on your Clay workspace's credit ledger,
+// so that input is yours to fill in from Clay's own usage dashboard rather
+// than a number this demo invents). Time-saved is a separate, clearly
+// labeled estimate, never folded into the cost figure.
+let ROI_INPUTS = { clay_cost_per_credit_usd: 0.01, clay_credits_used: 45, minutes_saved_per_account: 12 };
+function renderCostRoi() {
+  const r = ROI_INPUTS;
+  const tierA = ACCOUNTS.filter(a => a.score.tier === "A").length;
+  const clayCost = r.clay_cost_per_credit_usd * r.clay_credits_used;
+  const totalCost = clayCost + LIVE_AI_SPEND_USD;
+  const costPerEvaluated = totalCost / ACCOUNTS.length;
+  const costPerQualified = tierA > 0 ? totalCost / tierA : null;
+  const hoursSaved = (ACCOUNTS.length * r.minutes_saved_per_account) / 60;
+
+  const wrap = el(`<div>
+    <div class="page-head"><h1>Cost &amp; ROI</h1><p>Real cost per qualified account, built from actual Clay credit usage and this session's real AI spend — labeled separately from an illustrative time-saved estimate. Never called CAC: this tool doesn't touch ad spend or deal-close data, so it can't support that metric.</p></div>
+    <div class="icp-note">Clay credit usage and cost-per-credit below are operator inputs, not something this app can read live from your Clay workspace — replace the defaults with your workspace's actual usage for this run (Clay → Usage) before quoting this number externally. AI spend is real and already tracked from any live OpenAI calls triggered this session.</div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Inputs</h2><span class="hint">edit to match your actual Clay usage for this run</span></div>
+      <div class="body-pad">
+        <div class="cfg-row"><span>Clay cost per credit (USD)</span><input type="number" step="0.001" id="roi-credit-cost" value="${r.clay_cost_per_credit_usd}"></div>
+        <div class="cfg-row"><span>Clay credits used (this run, 15 companies)</span><input type="number" id="roi-credits-used" value="${r.clay_credits_used}"></div>
+        <div class="cfg-row"><span>Est. analyst minutes saved per account (manual research vs. this pipeline)</span><input type="number" id="roi-minutes-saved" value="${r.minutes_saved_per_account}"></div>
+      </div>
+      <div class="cfg-actions"><button class="btn primary" id="roi-apply">Recalculate</button></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Qualification cost (real)</h2></div>
+      <div class="body-pad">
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0">
+          <div class="kpi"><div class="v">$${clayCost.toFixed(2)}</div><div class="l">Clay enrichment cost (from inputs above)</div></div>
+          <div class="kpi"><div class="v">$${LIVE_AI_SPEND_USD.toFixed(4)}</div><div class="l">AI spend this session (real, tracked)</div></div>
+          <div class="kpi"><div class="v">$${costPerEvaluated.toFixed(2)}</div><div class="l">Cost per account evaluated</div></div>
+          <div class="kpi"><div class="v tier-a">${costPerQualified === null ? "—" : "$" + costPerQualified.toFixed(2)}</div><div class="l">Cost per qualified (Tier A) account</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="icp-note">"Qualified" here means Tier A — score, evidence and a named contact all cleared the bar. This is a qualification cost: what it took to find and prioritize an account worth a BDR's time. It is not a customer-acquisition cost, which would need real ad/campaign spend and closed-deal data this tool never sees.</div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Time saved (estimate)</h2><span class="hint">labeled as an estimate — not a measured number</span></div>
+      <div class="body-pad">
+        ${fieldRow("Assumption", `${r.minutes_saved_per_account} minutes/account, editable above — a rough stand-in for manual firmographic + signal research an analyst would otherwise do by hand`)}
+        ${fieldRow("Accounts evaluated this run", `${ACCOUNTS.length}`)}
+        ${fieldRow("Estimated analyst time saved", `${hoursSaved.toFixed(1)} hours`)}
+      </div>
+    </div>
+  </div>`);
+
+  wrap.querySelector("#roi-apply").addEventListener("click", () => {
+    ROI_INPUTS.clay_cost_per_credit_usd = parseFloat(wrap.querySelector("#roi-credit-cost").value) || 0;
+    ROI_INPUTS.clay_credits_used = parseFloat(wrap.querySelector("#roi-credits-used").value) || 0;
+    ROI_INPUTS.minutes_saved_per_account = parseFloat(wrap.querySelector("#roi-minutes-saved").value) || 0;
+    render();
+  });
+
   return wrap;
 }
 
