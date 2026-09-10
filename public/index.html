@@ -357,6 +357,13 @@ tbody tr:hover { background: var(--panel-2); }
 .claude-status.err { color: var(--bad); }
 .claude-status.ok { color: var(--good); }
 
+/* --- Model evaluation (human review of AI output / routing) --- */
+.eval-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.eval-row .eval-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.eval-row button.eval-btn.active[data-judgment="approved"], .eval-row button.eval-btn.active[data-agree="yes"] { background: var(--good); border-color: var(--good); color: #fff; }
+.eval-row button.eval-btn.active[data-judgment="edited"] { background: var(--warn); border-color: var(--warn); color: #fff; }
+.eval-row button.eval-btn.active[data-judgment="rejected"], .eval-row button.eval-btn.active[data-agree="no"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+
 @media (max-width: 900px) {
   .app { flex-direction: column; }
   .rail { position: static; width: 100%; height: auto; }
@@ -804,6 +811,18 @@ function logHealth(system, account, status, detail, latencyMs) {
   SYSTEM_HEALTH_LOG.unshift({ ts: new Date().toISOString(), system, account, status, retry: false, detail, latency_ms: latencyMs });
 }
 
+// ---------------------------------------------------------------------------
+// MODEL EVALUATION — human review of AI output and routing, captured from
+// each account's detail page (Approve/Edit/Reject on the AI reasoning and
+// on the generated outreach; agree/disagree on the deterministic routing
+// decision). This is the KPI surface for "does a human accept the model's
+// output" and "does a human agree with what the system ranked highest" —
+// real judgments made in this session, nothing pre-filled or simulated.
+// Resets on reload, same as every other session-only log in this app.
+// ---------------------------------------------------------------------------
+const MODEL_EVAL = {}; // accountId -> { reasoning: "approved"|"edited"|"rejected"|null, outreach: same, routing_agree: true|false|null }
+function getModelEval(id) { return MODEL_EVAL[id] || (MODEL_EVAL[id] = { reasoning: null, outreach: null, routing_agree: null }); }
+
 function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing) {
   const detectedCount = signals.filter(s => s.detected).length;
   const steps = [
@@ -1181,6 +1200,7 @@ function renderAccountDetail(id) {
   const a = ACCOUNTS.find(x => x.enriched.company_name === c.company_name);
   const r = LIVE_REASONING_OVERRIDES[id] || a.ai_reasoning;
   const isLive = !!LIVE_REASONING_OVERRIDES[id];
+  const modelEval = getModelEval(id);
 
   const wrap = el(`<div>
     <button class="back-btn" id="back">&larr; Back</button>
@@ -1301,6 +1321,12 @@ function renderAccountDetail(id) {
             <div class="reasoning-block"><div class="k">Pain hypothesis</div>${renderInference(r.pain_hypothesis)}</div>
             <div class="reasoning-block"><div class="k">Reason to contact now</div>${esc(r.reason_to_contact_now)}</div>
             <div class="reasoning-block"><div class="k">Missing information</div>${r.missing_information.length ? r.missing_information.map(esc).join(", ") : "none flagged"}</div>
+            <div class="eval-row" id="eval-reasoning">
+              <span class="eval-label">Would you use this as-is?</span>
+              <button class="btn small eval-btn${modelEval.reasoning === "approved" ? " active" : ""}" data-judgment="approved">Approve</button>
+              <button class="btn small eval-btn${modelEval.reasoning === "edited" ? " active" : ""}" data-judgment="edited">Would edit</button>
+              <button class="btn small eval-btn${modelEval.reasoning === "rejected" ? " active" : ""}" data-judgment="rejected">Reject</button>
+            </div>
           </div>
         </div>
 
@@ -1313,6 +1339,12 @@ function renderAccountDetail(id) {
               <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(a.outreach.call_to_action)}</div>
             </div>
             <div style="margin-top:10px;font-size:12.5px;${a.qa.passed ? 'color:var(--good)' : 'color:var(--bad)'}">${a.qa.passed ? '✓ QA passed' : '✗ QA failed'} — ${esc(a.qa.note)}</div>
+            <div class="eval-row" id="eval-outreach">
+              <span class="eval-label">Would you send this as-is?</span>
+              <button class="btn small eval-btn${modelEval.outreach === "approved" ? " active" : ""}" data-judgment="approved">Approve</button>
+              <button class="btn small eval-btn${modelEval.outreach === "edited" ? " active" : ""}" data-judgment="edited">Would edit</button>
+              <button class="btn small eval-btn${modelEval.outreach === "rejected" ? " active" : ""}" data-judgment="rejected">Reject</button>
+            </div>
           </div>
         </div>
 
@@ -1408,6 +1440,11 @@ function renderAccountDetail(id) {
             ${fieldRow("Lifecycle stage", a.score.tier === "A" ? "Sales Qualified Lead" : a.score.tier === "B" ? "Marketing Qualified Lead" : "Not qualified")}
             ${fieldRow("Owner", a.routing.action === "Route to BDR" ? "BDR queue — round robin" : "Unassigned")}
             ${fieldRow("Timestamp", new Date(a.timestamp).toLocaleString())}
+            <div class="eval-row" id="eval-routing">
+              <span class="eval-label">Do you agree with this routing decision?</span>
+              <button class="btn small eval-btn${modelEval.routing_agree === true ? " active" : ""}" data-agree="yes">Agree</button>
+              <button class="btn small eval-btn${modelEval.routing_agree === false ? " active" : ""}" data-agree="no">Disagree</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1415,6 +1452,20 @@ function renderAccountDetail(id) {
   </div>`);
 
   wrap.querySelector("#back").addEventListener("click", () => { currentAccountId = null; render(); });
+
+  wrap.querySelector("#eval-reasoning").querySelectorAll(".eval-btn").forEach(btn => btn.addEventListener("click", () => {
+    modelEval.reasoning = modelEval.reasoning === btn.dataset.judgment ? null : btn.dataset.judgment;
+    openAccount(id);
+  }));
+  wrap.querySelector("#eval-outreach").querySelectorAll(".eval-btn").forEach(btn => btn.addEventListener("click", () => {
+    modelEval.outreach = modelEval.outreach === btn.dataset.judgment ? null : btn.dataset.judgment;
+    openAccount(id);
+  }));
+  wrap.querySelector("#eval-routing").querySelectorAll(".eval-btn").forEach(btn => btn.addEventListener("click", () => {
+    const val = btn.dataset.agree === "yes";
+    modelEval.routing_agree = modelEval.routing_agree === val ? null : val;
+    openAccount(id);
+  }));
 
   const statusEl = wrap.querySelector("#claude-status");
   wrap.querySelector("#run-live-btn").addEventListener("click", async () => {
@@ -1634,6 +1685,20 @@ function renderOutcomes() {
   ACCOUNTS.forEach(a => a.signals.forEach(s => { if (s.detected) signalCounts[s.signal_name] = (signalCounts[s.signal_name] || 0) + 1; }));
   const topSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0];
 
+  // Model evaluation — real, computed from ACCOUNTS + any human review captured
+  // in MODEL_EVAL this session (see account detail's Approve/Would edit/Reject
+  // and Agree/Disagree controls).
+  const avgScoreByTier = t => { const list = ACCOUNTS.filter(a => a.score.tier === t); return list.length ? Math.round(list.reduce((s, a) => s + a.score.total_score, 0) / list.length) : null; };
+  const avgScoreA = avgScoreByTier("A"), avgScoreB = avgScoreByTier("B"), avgScoreC = avgScoreByTier("C");
+  const scoreSeparated = avgScoreA !== null && avgScoreB !== null && avgScoreC !== null && avgScoreA > avgScoreB && avgScoreB > avgScoreC;
+  const withEvalId = ACCOUNTS.map(a => ({ a, id: a.enriched.id }));
+  const reasoningJudged = withEvalId.map(({ id }) => MODEL_EVAL[id]?.reasoning).filter(Boolean);
+  const outreachJudged = withEvalId.map(({ id }) => MODEL_EVAL[id]?.outreach).filter(Boolean);
+  const routingJudged = withEvalId.filter(({ id }) => MODEL_EVAL[id]?.routing_agree !== null && MODEL_EVAL[id]?.routing_agree !== undefined);
+  const routingDisagreeNotC = routingJudged.filter(({ a, id }) => MODEL_EVAL[id].routing_agree === false && a.score.tier !== "C").length;
+  const pct = (n, d) => d > 0 ? Math.round((n / d) * 100) : null;
+  const acceptanceRate = (judged) => pct(judged.filter(j => j === "approved").length, judged.length);
+
   const wrap = el(`<div>
     <div class="page-head"><h1>Outcomes</h1><p>Where the real pipeline stops (accounts evaluated → sequences launched) and where an illustrative funnel begins (replies → pipeline) — never blended into one number.</p></div>
 
@@ -1687,6 +1752,23 @@ function renderOutcomes() {
         ${fieldRow("Accounts needing contact enrichment before BDR", `${ACCOUNTS.filter(a => a.routing.action === "Contact enrichment").length}`)}
         ${fieldRow("Tier B accounts one verified contact away from Tier A", `${tierB.length} (see ICP Config to test lowering the threshold instead)`)}
         ${fieldRow("AI spend this session (real)", LIVE_AI_CALL_COUNT > 0 ? `$${LIVE_AI_SPEND_USD.toFixed(6)} across ${LIVE_AI_CALL_COUNT} live OpenAI call(s)` : "$0.00 — no live OpenAI call has been triggered yet this session, see any account's detail page")}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Model evaluation</h2><span class="hint">Tier separation, human acceptance of AI output, and agreement with routing</span></div>
+      <div class="body-pad">
+        <p style="margin:0 0 10px;font-size:13.5px;color:var(--muted)">Real conversion-by-tier and Tier A precision need an actual campaign this demo has never run — that's out of scope (no autonomous sending). What's measurable right now: whether the scorer actually separates tiers, and whether a human reviewing the AI's output and the routing decision agrees with it. Go to any account's detail page and use Approve/Would edit/Reject and Agree/Disagree to add data below — it's a real, session-only log, not pre-filled.</p>
+        <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+          <div class="kpi"><div class="v tier-a">${avgScoreA ?? "—"}</div><div class="l">Avg. score — Tier A</div></div>
+          <div class="kpi"><div class="v tier-b">${avgScoreB ?? "—"}</div><div class="l">Avg. score — Tier B</div></div>
+          <div class="kpi"><div class="v tier-c">${avgScoreC ?? "—"}</div><div class="l">Avg. score — Tier C</div></div>
+        </div>
+        ${fieldRow("Score separation (real)", scoreSeparated ? "A > B > C — the scorer is actually ranking accounts, not producing noise" : "Tiers are not cleanly separated in this run — check ICP Config weights")}
+        ${fieldRow("AI reasoning — human acceptance rate", reasoningJudged.length > 0 ? `${acceptanceRate(reasoningJudged)}% approved as-is (${reasoningJudged.length}/${ACCOUNTS.length} accounts reviewed)` : "No reviews yet — use Approve/Would edit/Reject under \"AI interpretation\" on an account's detail page")}
+        ${fieldRow("Outreach — human acceptance rate", outreachJudged.length > 0 ? `${acceptanceRate(outreachJudged)}% approved as-is (${outreachJudged.length}/${ACCOUNTS.length} accounts reviewed)` : "No reviews yet — use Approve/Would edit/Reject under \"Generated outreach\" on an account's detail page")}
+        ${fieldRow("Routing agreement rate", routingJudged.length > 0 ? `${pct(routingJudged.length - routingDisagreeNotC - routingJudged.filter(({ a, id }) => MODEL_EVAL[id].routing_agree === false && a.score.tier === "C").length, routingJudged.length)}% agreed (${routingJudged.length}/${ACCOUNTS.length} accounts reviewed)` : "No reviews yet — use Agree/Disagree under \"Routing & CRM sync\" on an account's detail page")}
+        ${fieldRow("False-positive proxy (Tier A/B disagreements)", routingJudged.length > 0 ? `${routingDisagreeNotC} account(s) a reviewer disagreed with routing on, despite scoring Tier A or B` : "No reviews yet")}
       </div>
     </div>
 
