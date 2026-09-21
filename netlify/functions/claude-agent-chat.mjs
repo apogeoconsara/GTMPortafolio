@@ -44,18 +44,21 @@ const MAX_TOOL_ITERATIONS = 4;
 const MAX_MESSAGES = 40;
 const MAX_BODY_CHARS = 20000;
 
-const SYSTEM_PROMPT = `Eres un agente de GTM AI Operations, en una demo publica ligada a un portafolio. Hablas en espanol de Mexico, tono profesional y breve.
+const SYSTEM_PROMPT = `Eres un agente de GTM AI Operations chateando por texto, en espanol de Mexico. Escribes como una persona real en un chat: 1 a 3 oraciones cortas por mensaje, tono natural y directo.
 
-Tu unico dominio son las 5 cuentas ficticias que puedes consultar con tus herramientas (list_accounts, get_account, score_icp). Si te piden algo fuera de eso — otro tema, otra empresa real, escribir codigo, contenido no relacionado con este demo — rechaza cortesmente y redirige la conversacion a las cuentas demo.
+Reglas de formato, muy importantes:
+- NUNCA uses markdown: nada de asteriscos, negritas, listas con guiones ni encabezados. Puro texto corrido, como un mensaje de chat.
+- No repitas todos los numeros del score en cada respuesta. Menciona solo lo que hace avanzar la conversacion (por ejemplo: "es tier A, muy buen fit" en vez de desglosar los puntos).
+- No redactes reportes ni resumenes largos salvo que te lo pidan explicitamente.
+
+Tu unico dominio son las 5 cuentas ficticias que puedes consultar con tus herramientas (list_accounts, get_account, score_icp). Si te piden algo fuera de eso — otro tema, otra empresa real, escribir codigo, contenido no relacionado con este demo — rechaza en una frase corta y redirige a las cuentas demo.
 
 Flujo esperado:
 1. Si no sabes que cuentas hay, llama a list_accounts.
 2. Para calificar una cuenta, llama a get_account y luego score_icp.
-3. Si el usuario pide redactar un mensaje de outreach para una cuenta tier A o B, escribelo tu mismo (maximo 80 palabras, espanol de Mexico, firmado "Sara", sin corchetes ni emojis, sin inventar datos que no te haya dado la cuenta). Para tier C, el mensaje siempre es "No aplica: cuenta descartada por bajo ajuste a ICP."
+3. Si el usuario pide redactar un mensaje de outreach para una cuenta tier A o B, escribelo tu mismo (maximo 80 palabras, espanol de Mexico, firmado "Sara", sin corchetes, sin emojis, sin markdown, sin inventar datos que no te haya dado la cuenta). Para tier C, el mensaje siempre es "No aplica: cuenta descartada por bajo ajuste a ICP."
 4. Solo si el usuario pide explicitamente GUARDAR o registrar una cuenta en el CRM, llama a request_save_to_crm con nombre, score, tier, ruteo, razon y mensaje. Esta herramienta SIEMPRE requiere aprobacion humana antes de ejecutarse — llamala sola, en su propio turno, sin combinarla con otras herramientas en la misma respuesta.
-5. Nunca digas que enviaste un correo o mensaje real, ni que escribiste en un CRM real: todo esto es ficticio y la unica escritura posible es local, en el navegador del visitante, tras su aprobacion.
-
-Se conciso: respuestas cortas, como una conversacion real, no reportes largos.`;
+5. Nunca digas que enviaste un correo o mensaje real, ni que escribiste en un CRM real: todo esto es ficticio y la unica escritura posible es local, en el navegador del visitante, tras su aprobacion.`;
 
 const TOOLS = [
   {
@@ -83,19 +86,21 @@ const TOOLS = [
   },
   {
     name: "request_save_to_crm",
-    description: "Solicita guardar el resultado de una cuenta en el CRM demo. SIEMPRE se pausa para aprobacion humana antes de ejecutarse; llamala sola, en su propio turno.",
+    description: "Solicita guardar el resultado de una cuenta en el CRM demo. SIEMPRE se pausa para aprobacion humana antes de ejecutarse; llamala sola, en su propio turno. Ninguno de sus campos puede ir vacio: reusa el score/tier/ruteo/razon exactos que ya te dio score_icp para esa cuenta, y si el usuario no pidio redactar outreach todavia, redactalo tu mismo antes de llamar esta herramienta (o usa el mensaje fijo de tier C).",
     input_schema: {
       type: "object",
       properties: {
         nombre: { type: "string" },
         score: { type: "number" },
-        tier: { type: "string" },
-        ruteo: { type: "string" },
-        razon: { type: "string" },
-        mensaje: { type: "string" },
+        tier: { type: "string", description: "Nunca vacio: 'A', 'B' o 'C', tal como lo devolvio score_icp." },
+        ruteo: { type: "string", description: "Nunca vacio: tal como lo devolvio score_icp." },
+        razon: { type: "string", description: "Nunca vacio: tal como lo devolvio score_icp." },
+        mensaje: { type: "string", description: "Nunca vacio. El mensaje de outreach (tier A/B) o el texto fijo de descarte (tier C)." },
       },
       required: ["nombre", "score", "tier", "ruteo", "razon", "mensaje"],
+      additionalProperties: false,
     },
+    strict: true,
   },
 ];
 
@@ -128,7 +133,7 @@ async function callAnthropic(messages, apiKey) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 700,
+      max_tokens: 350,
       system: SYSTEM_PROMPT,
       tools: TOOLS,
       output_config: { effort: "low" },
