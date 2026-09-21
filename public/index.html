@@ -393,6 +393,7 @@ tbody tr:hover { background: var(--panel-2); }
       <button data-page="roi"><span class="dot"></span>Cost &amp; ROI</button>
       <button data-page="config"><span class="dot"></span>ICP Config</button>
       <button data-page="architecture"><span class="dot"></span>Architecture</button>
+      <button data-page="claude-agent"><span class="dot"></span>Claude Agent (Demo)</button>
     </nav>
   </aside>
   <main class="main" id="main"></main>
@@ -1063,6 +1064,7 @@ function render() {
   if (currentPage === "roi") main.appendChild(renderCostRoi());
   if (currentPage === "config") main.appendChild(renderConfig());
   if (currentPage === "architecture") main.appendChild(renderArchitecture());
+  if (currentPage === "claude-agent") main.appendChild(renderClaudeAgentDemo());
 }
 
 function goTo(page) { currentAccountId = null; currentPage = page; render(); window.scrollTo(0, 0); }
@@ -2341,6 +2343,148 @@ function renderArchitecture() {
     renderPsDetail(Number(btn.dataset.i));
   }));
   renderPsDetail(0);
+
+  return wrap;
+}
+
+/* ---------------------------------------------------------------- CLAUDE AGENT DEMO */
+// Second, self-contained demo: a Claude Agent SDK-style agent for GTM AI
+// Operations. Uses its own 5 FICTIONAL accounts (tagged "(Demo)") — never
+// the real companies from the main engine above — and calls a Netlify
+// Function (netlify/functions/claude-agent.mjs) that reimplements the same
+// scoring + outreach-drafting logic as the Python demo in /gtm-agent-demo,
+// using a direct Anthropic API call (the real Agent SDK needs a long-lived
+// process a serverless function can't host — see that folder's README).
+const CLAUDE_CUENTAS_DEMO = [
+  { nombre: "Acme Textiles (Demo)", industria: "Manufactura", empleados: 800, pais: "Mexico" },
+  { nombre: "Nebula Software (Demo)", industria: "SaaS", empleados: 120, pais: "Colombia" },
+  { nombre: "Grupo Andino Retail (Demo)", industria: "Retail", empleados: 3000, pais: "Peru" },
+  { nombre: "Constructora del Valle (Demo)", industria: "Construccion", empleados: 60, pais: "Chile" },
+  { nombre: "FinTech Horizonte (Demo)", industria: "Fintech", empleados: 250, pais: "Argentina" },
+];
+
+const CLAUDE_STATE = { selected: null, status: "idle", result: null, error: null, log: [], crm: [] };
+
+function claudeLog(line) { CLAUDE_STATE.log.push(line); }
+
+async function claudeProcesarCuenta(nombre) {
+  CLAUDE_STATE.selected = nombre;
+  CLAUDE_STATE.status = "loading";
+  CLAUDE_STATE.error = null;
+  CLAUDE_STATE.result = null;
+  CLAUDE_STATE.log = [`Herramienta: get_account("${nombre}")`, `Herramienta: score_icp("${nombre}")`];
+  render();
+
+  try {
+    const res = await fetch("/.netlify/functions/claude-agent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ account_name: nombre }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
+
+    if (data.meta && data.meta.source === "live_anthropic") {
+      claudeLog(`Subagente "redactor" (Claude, ${data.meta.model}) escribio el mensaje de outreach — ${data.meta.output_tokens} tokens de salida, ~$${data.meta.estimated_cost_usd.toFixed(5)}`);
+    } else {
+      claudeLog(`Tier C: se uso el mensaje fijo (no se llamo a Claude, sin costo)`);
+    }
+    claudeLog(`Esperando aprobacion humana antes de save_to_crm...`);
+
+    CLAUDE_STATE.result = data;
+    CLAUDE_STATE.status = "awaiting_approval";
+  } catch (err) {
+    CLAUDE_STATE.error = err.message;
+    CLAUDE_STATE.status = "error";
+  }
+  render();
+}
+
+function claudeAprobar(aprobado) {
+  const r = CLAUDE_STATE.result;
+  if (aprobado) {
+    CLAUDE_STATE.crm.push({ nombre: r.nombre, score: r.score, tier: r.tier, ruteo: r.ruteo, razon: r.razon, mensaje: r.mensaje });
+    claudeLog(`[CRM DEMO] Guardado localmente (solo en este navegador) para "${r.nombre}" — tier ${r.tier}.`);
+  } else {
+    claudeLog(`Rechazado: no se guardo "${r.nombre}" en el CRM demo.`);
+  }
+  CLAUDE_STATE.status = "idle";
+  CLAUDE_STATE.result = null;
+  render();
+}
+
+function renderClaudeAgentDemo() {
+  const wrap = el(`<div>
+    <div class="page-head">
+      <h1>Claude Agent (Demo)</h1>
+      <p>Agente de GTM AI Operations construido con el Claude Agent SDK para Python. Esta pagina corre una version equivalente en el navegador; el codigo original del SDK esta en <span class="tag">/gtm-agent-demo</span> de este mismo repositorio.</p>
+    </div>
+
+    <div class="cfg-note" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12.5px;color:var(--text)">
+      <strong>Todo aqui es ficticio.</strong> Las 5 cuentas estan marcadas "(Demo)" y no son las empresas reales del motor principal de este sitio. No se envia ningun correo ni se escribe en ningun CRM real: "guardar" solo agrega una fila a una tabla que vive en tu navegador y se borra al recargar.
+      <br><br>
+      <strong>Como funciona esta version:</strong> el demo original (carpeta <span class="tag">/gtm-agent-demo</span>) usa <span class="tag">claude-agent-sdk</span> (ClaudeSDKClient, create_sdk_mcp_server, AgentDefinition, can_use_tool) desde Python. Esa libreria necesita un proceso de larga duracion que una funcion serverless de Netlify no puede alojar, asi que esta pagina llama en su lugar a una funcion (<span class="tag">netlify/functions/claude-agent.mjs</span>) que reimplementa las mismas reglas de scoring y el mismo paso de redaccion, con una llamada directa a la API de Claude (modelo <span class="tag">claude-sonnet-5</span>) usando la API key del dueño del sitio, guardada solo como variable de entorno de Netlify.
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Cuentas demo</h2><span class="hint">elige una para calificarla y redactar su outreach</span></div>
+      <table>
+        <thead><tr><th>Cuenta</th><th>Industria</th><th>Empleados</th><th>Pais</th><th></th></tr></thead>
+        <tbody>
+          ${CLAUDE_CUENTAS_DEMO.map((c) => `
+            <tr>
+              <td>${esc(c.nombre)}</td>
+              <td>${esc(c.industria)}</td>
+              <td>${c.empleados}</td>
+              <td>${esc(c.pais)}</td>
+              <td><button class="btn small primary" data-account="${esc(c.nombre)}" ${CLAUDE_STATE.status === "loading" ? "disabled" : ""}>Procesar</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Log del agente</h2><span class="hint">cada herramienta que se llama, en orden</span></div>
+      <div style="padding:14px 16px">
+        ${CLAUDE_STATE.status === "idle" && CLAUDE_STATE.log.length === 0
+          ? '<p style="margin:0;color:var(--muted);font-size:13px">Elige una cuenta arriba para empezar.</p>'
+          : CLAUDE_STATE.log.map((l) => `<div class="claude-status" style="margin-bottom:4px">${esc(l)}</div>`).join("")}
+        ${CLAUDE_STATE.status === "loading" ? '<div class="claude-status">Consultando al agente...</div>' : ""}
+        ${CLAUDE_STATE.status === "error" ? `<div class="claude-status err">Error: ${esc(CLAUDE_STATE.error)}</div>` : ""}
+        ${CLAUDE_STATE.status === "awaiting_approval" && CLAUDE_STATE.result ? `
+          <div style="margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:12px">
+            <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Aprobacion requerida antes de <span class="tag">save_to_crm</span></div>
+            <div><strong>${esc(CLAUDE_STATE.result.nombre)}</strong> — score ${CLAUDE_STATE.result.score}, tier <strong>${esc(CLAUDE_STATE.result.tier)}</strong>, ruteo: ${esc(CLAUDE_STATE.result.ruteo)}</div>
+            <p style="font-size:13px;margin:8px 0">${esc(CLAUDE_STATE.result.mensaje)}</p>
+            <div style="display:flex;gap:10px">
+              <button class="btn primary small" id="claude-aprobar-si">Si, guardar</button>
+              <button class="btn small" id="claude-aprobar-no">No</button>
+            </div>
+          </div>` : ""}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>CRM demo (este navegador)</h2><span class="hint">${CLAUDE_STATE.crm.length} registro(s)</span></div>
+      ${CLAUDE_STATE.crm.length === 0
+        ? '<p style="padding:14px 16px;margin:0;color:var(--muted);font-size:13px">Aun no se ha guardado ninguna cuenta.</p>'
+        : `<table>
+            <thead><tr><th>Cuenta</th><th>Score</th><th>Tier</th><th>Ruteo</th></tr></thead>
+            <tbody>
+              ${[...CLAUDE_STATE.crm].sort((a, b) => b.score - a.score).map((r) => `
+                <tr><td>${esc(r.nombre)}</td><td>${r.score}</td><td>${esc(r.tier)}</td><td>${esc(r.ruteo)}</td></tr>`).join("")}
+            </tbody>
+          </table>`}
+    </div>
+  </div>`);
+
+  wrap.querySelectorAll("[data-account]").forEach((btn) => {
+    btn.addEventListener("click", () => claudeProcesarCuenta(btn.dataset.account));
+  });
+  const siBtn = wrap.querySelector("#claude-aprobar-si");
+  const noBtn = wrap.querySelector("#claude-aprobar-no");
+  if (siBtn) siBtn.addEventListener("click", () => claudeAprobar(true));
+  if (noBtn) noBtn.addEventListener("click", () => claudeAprobar(false));
 
   return wrap;
 }

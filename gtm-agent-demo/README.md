@@ -12,6 +12,29 @@ guardrails y aprobación humana antes de una acción sensible.
 > "CRM" es un archivo local (`crm_demo.json`). El agente **no envía correos,
 > no manda mensajes ni escribe en ningún CRM real**.
 
+## Versión en vivo dentro del sitio del portafolio
+
+Además del CLI y de `chat_app.py`, este mismo portafolio (el sitio "GTM AI
+Outbound Engine") tiene una pestaña **"Claude Agent (Demo)"** con las mismas
+5 cuentas, el mismo scoring y el mismo paso de redacción, corriendo en el
+navegador sin que nadie tenga que instalar nada.
+
+**Importante — esa versión NO es literalmente el Claude Agent SDK.** El SDK
+(`claude-agent-sdk`) envuelve un proceso de larga duración (la CLI de Claude
+Code), y una función serverless de Netlify no puede alojar eso. La pestaña
+del sitio llama en su lugar a `netlify/functions/claude-agent.mjs`, que
+reimplementa las mismas reglas de scoring (en JavaScript) y llama
+directamente a la API de Claude para el paso de redacción — con la
+`ANTHROPIC_API_KEY` guardada solo como variable de entorno de Netlify, nunca
+expuesta al navegador. El código real del SDK (`ClaudeSDKClient`,
+`create_sdk_mcp_server`, `AgentDefinition`, `can_use_tool`) vive únicamente
+aquí, en esta carpeta, en Python.
+
+Para que esa pestaña funcione en el sitio desplegado, el dueño del sitio
+tiene que agregar `ANTHROPIC_API_KEY` en Netlify: **Site settings → Environment
+variables**, igual que ya está configurado `OPENAI_API_KEY` para el motor
+principal del sitio.
+
 ## Qué demuestra
 
 - **Herramientas propias vía MCP en proceso**: `create_sdk_mcp_server` +
