@@ -29,9 +29,9 @@
 
 import { CUENTAS_DEMO, calcularScore } from "./_gtm_agent_shared.mjs";
 
-const MODEL = "claude-sonnet-5";
-const PRICE_PER_1M_INPUT_TOKENS = 2.0;
-const PRICE_PER_1M_OUTPUT_TOKENS = 10.0;
+const MODEL = "claude-haiku-4-5";
+const PRICE_PER_1M_INPUT_TOKENS = 1.0;
+const PRICE_PER_1M_OUTPUT_TOKENS = 5.0;
 
 const REDACTOR_SYSTEM_PROMPT = `Eres 'Sara', una especialista de GTM AI Operations. Escribes mensajes de outreach en frio, en espanol de Mexico, de maximo 80 palabras. Reglas estrictas:
 - No inventes datos, cifras ni nombres de personas que no te hayan dado.

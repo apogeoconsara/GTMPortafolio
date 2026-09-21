@@ -39,7 +39,7 @@
 
 import { CUENTAS_DEMO, buscarCuenta, calcularScore } from "./_gtm_agent_shared.mjs";
 
-const MODEL = "claude-sonnet-5";
+const MODEL = "claude-haiku-4-5";
 const MAX_TOOL_ITERATIONS = 4;
 const MAX_MESSAGES = 40;
 const MAX_BODY_CHARS = 20000;
@@ -136,7 +136,6 @@ async function callAnthropic(messages, apiKey) {
       max_tokens: 350,
       system: SYSTEM_PROMPT,
       tools: TOOLS,
-      output_config: { effort: "low" },
       messages,
     }),
   });
@@ -162,7 +161,25 @@ async function runLoop(messages, apiKey) {
 
     for (const block of toolUseBlocks) {
       if (block.name === "request_save_to_crm") {
-        pendingApproval = { tool_use_id: block.id, input: block.input };
+        // Never trust the model's copy of score/tier/ruteo/razon (it can
+        // omit or drift on fields even with strict:true, more so on
+        // smaller models) — recompute them deterministically server-side
+        // from the account name. Only "mensaje" is genuinely model-authored
+        // content, so that's the one field we keep from the tool call,
+        // with a safe fallback if it's missing.
+        const cuenta = buscarCuenta(block.input && block.input.nombre);
+        if (!cuenta) {
+          heldToolResults.push({
+            type: "tool_result", tool_use_id: block.id,
+            content: `No se encontro ninguna cuenta demo que coincida con '${block.input && block.input.nombre}'.`,
+            is_error: true,
+          });
+          continue;
+        }
+        const resultado = calcularScore(cuenta.nombre, cuenta);
+        const mensaje = (block.input && block.input.mensaje) ||
+          (resultado.tier === "C" ? "No aplica: cuenta descartada por bajo ajuste a ICP." : "(el agente no redacto un mensaje de outreach para esta cuenta)");
+        pendingApproval = { tool_use_id: block.id, input: { ...resultado, mensaje } };
         continue;
       }
       const result = ejecutarHerramientaSegura(block.name, block.input);
