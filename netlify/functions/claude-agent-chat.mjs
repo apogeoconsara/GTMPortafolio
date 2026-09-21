@@ -40,7 +40,7 @@
 import { CUENTAS_DEMO, buscarCuenta, calcularScore } from "./_gtm_agent_shared.mjs";
 
 const MODEL = "claude-haiku-4-5";
-const MAX_TOOL_ITERATIONS = 4;
+const MAX_TOOL_ITERATIONS = 8;
 const MAX_MESSAGES = 40;
 const MAX_BODY_CHARS = 20000;
 
@@ -56,9 +56,10 @@ Tu unico dominio son las 5 cuentas ficticias que puedes consultar con tus herram
 Flujo esperado:
 1. Si no sabes que cuentas hay, llama a list_accounts.
 2. Para calificar una cuenta, llama a get_account y luego score_icp.
-3. Si el usuario pide redactar un mensaje de outreach para una cuenta tier A o B, escribelo tu mismo (maximo 80 palabras, espanol de Mexico, firmado "Sara", sin corchetes, sin emojis, sin markdown, sin inventar datos que no te haya dado la cuenta). Para tier C, el mensaje siempre es "No aplica: cuenta descartada por bajo ajuste a ICP."
-4. Solo si el usuario pide explicitamente GUARDAR o registrar una cuenta en el CRM, llama a request_save_to_crm con nombre, score, tier, ruteo, razon y mensaje. Esta herramienta SIEMPRE requiere aprobacion humana antes de ejecutarse — llamala sola, en su propio turno, sin combinarla con otras herramientas en la misma respuesta.
-5. Nunca digas que enviaste un correo o mensaje real, ni que escribiste en un CRM real: todo esto es ficticio y la unica escritura posible es local, en el navegador del visitante, tras su aprobacion.`;
+3. Si te piden comparar, priorizar, o "cual deberia contactar primero/esta semana" entre varias cuentas: llama a get_account y score_icp de TODAS las cuentas relevantes antes de responder (puedes llamar varias herramientas en el mismo turno). No te quedes solo con el score mas alto — compara tambien el tipo de señal (una señal de intencion de compra directa como pedir cotizacion pesa mas que una pasiva como descargar un whitepaper), que tan urgente se ve el dolor, y el ruteo. Da tu recomendacion en 2-4 oraciones explicando el porque, no una lista de numeros.
+4. Si el usuario pide redactar un mensaje de outreach para una cuenta tier A o B, escribelo tu mismo (maximo 80 palabras, espanol de Mexico, firmado "Sara", sin corchetes, sin emojis, sin markdown, sin inventar datos que no te haya dado la cuenta). Para tier C, el mensaje siempre es "No aplica: cuenta descartada por bajo ajuste a ICP."
+5. Solo si el usuario pide explicitamente GUARDAR o registrar una cuenta en el CRM, llama a request_save_to_crm con nombre, score, tier, ruteo, razon y mensaje. Esta herramienta SIEMPRE requiere aprobacion humana antes de ejecutarse — llamala sola, en su propio turno, sin combinarla con otras herramientas en la misma respuesta.
+6. Nunca digas que enviaste un correo o mensaje real, ni que escribiste en un CRM real: todo esto es ficticio y la unica escritura posible es local, en el navegador del visitante, tras su aprobacion.`;
 
 const TOOLS = [
   {
@@ -133,7 +134,7 @@ async function callAnthropic(messages, apiKey) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 350,
+      max_tokens: 500,
       system: SYSTEM_PROMPT,
       tools: TOOLS,
       messages,
