@@ -178,6 +178,36 @@ contacto (`acc_07`, `acc_08`, `acc_09`) — todos los demás datos (nombre, carg
 contacto) están fijos en el propio código de la función, no llegan desde el navegador, para
 que nadie pueda inyectar datos arbitrarios a tu Zap o tu CRM real.
 
+## AI Ops Console (Demo) — Salesforce-oriented agent
+
+Pestaña separada ("AI Ops Console (Demo)", segunda en el menú) que demuestra un flujo
+distinto: un agente que responde "¿qué cuentas debería priorizar esta semana?" contra datos
+con forma de Salesforce (Account/Contact/Opportunity/Task), no contra las 15 empresas reales
+de arriba. Salesforce es el sistema de registro pretendido; este agente es una capa de
+inteligencia/orquestación encima, nunca un reemplazo del CRM.
+
+**Estado real de la integración con Salesforce (inspeccionado, no asumido):** hoy no hay
+ningún conector MCP de Salesforce configurado en este proyecto — no hay `SALESFORCE_*` en
+ninguna variable de entorno, no hay Connected App, no hay tokens. Por eso
+`netlify/functions/_crm_connector.mjs` sirve datos **sintéticos locales**, etiquetados como
+tales en cada registro y en la propia UI ("Data source: Local synthetic dataset (not
+Salesforce)"). Conectar Salesforce real es implementar las dos funciones de ese archivo
+contra el MCP/REST de Salesforce — el resto de la app no cambia.
+
+**Seguridad por diseño, no por bandera que alguien pueda olvidar:**
+- No existe ninguna herramienta de envío de correo/mensaje/secuencia en
+  `gtm-ops-agent.mjs` — no está deshabilitada, simplemente nunca se definió, así que el
+  modelo no tiene nada "peligroso" que llamar.
+- La única herramienta de escritura (`propose_crm_action`, limitada a Task/Note) nunca
+  ejecuta nada — siempre regresa una propuesta para que un humano la apruebe.
+- `confirm-crm-action.mjs` es el único lugar donde algo podría ejecutarse, y por defecto
+  vive en modo dry-run (`ALLOW_SALESFORCE_WRITES` sin definir o en `false`). Si se activa,
+  igual solo permite Task/Note, y hoy además no hay conector Salesforce real implementado,
+  así que la ejecución real es imposible aunque se active la bandera.
+- La prioridad de cada cuenta la calcula el servidor de forma determinista a partir de las
+  mismas señales que ve el usuario — nunca se confía en la etiqueta que el modelo pudiera
+  inventar, para que la insignia y la evidencia jamás se contradigan.
+
 ## Disclaimer
 
 Proyecto de portafolio. Los datos de las 6 empresas (headcount, crecimiento, vacantes,

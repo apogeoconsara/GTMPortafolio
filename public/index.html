@@ -397,7 +397,7 @@ tbody tr:hover { background: var(--panel-2); }
     <div id="ai-mode-badge"></div>
     <nav>
       <button data-page="dashboard" class="active"><span class="dot"></span>Dashboard</button>
-      <button data-page="claude-agent"><span class="dot"></span>Claude Agent (Demo)</button>
+      <button data-page="claude-agent"><span class="dot"></span>AI Ops Console (Demo)</button>
       <button data-page="accounts"><span class="dot"></span>Accounts</button>
       <button data-page="signals"><span class="dot"></span>Signals</button>
       <button data-page="routing"><span class="dot"></span>Routing</button>
@@ -1076,7 +1076,7 @@ function render() {
   if (currentPage === "roi") main.appendChild(renderCostRoi());
   if (currentPage === "config") main.appendChild(renderConfig());
   if (currentPage === "architecture") main.appendChild(renderArchitecture());
-  if (currentPage === "claude-agent") main.appendChild(renderClaudeAgentDemo());
+  if (currentPage === "claude-agent") main.appendChild(renderOpsConsole());
 }
 
 function goTo(page) { currentAccountId = null; currentPage = page; render(); window.scrollTo(0, 0); }
@@ -2359,38 +2359,53 @@ function renderArchitecture() {
   return wrap;
 }
 
-/* ---------------------------------------------------------------- CLAUDE AGENT DEMO */
-// Second, self-contained demo: a Claude Agent SDK-style agent for GTM AI
-// Operations. Uses its own 5 FICTIONAL accounts (tagged "(Demo)") — never
-// the real companies from the main engine above — and calls a Netlify
-// Function (netlify/functions/claude-agent.mjs) that reimplements the same
-// scoring + outreach-drafting logic as the Python demo in /gtm-agent-demo,
-// using a direct Anthropic API call (the real Agent SDK needs a long-lived
-// process a serverless function can't host — see that folder's README).
-const CLAUDE_CUENTAS_DEMO = [
-  { nombre: "Acme Textiles (Demo)", industria: "Manufactura", empleados: 800, pais: "Mexico" },
-  { nombre: "Nebula Software (Demo)", industria: "SaaS", empleados: 120, pais: "Colombia" },
-  { nombre: "Grupo Andino Retail (Demo)", industria: "Retail", empleados: 3000, pais: "Peru" },
-  { nombre: "Constructora del Valle (Demo)", industria: "Construccion", empleados: 60, pais: "Chile" },
-  { nombre: "FinTech Horizonte (Demo)", industria: "Fintech", empleados: 250, pais: "Argentina" },
-];
+/* ---------------------------------------------------------------- AI OPS CONSOLE (SALESFORCE-ORIENTED) */
+// GTM AI Operations console: "Which accounts should I prioritize this
+// week?" answered from CRM-shaped data (Account/Contact/Opportunity/Task),
+// via netlify/functions/gtm-ops-agent.mjs.
+//
+// Salesforce is the intended system of record; this UI is an intelligence/
+// orchestration layer on top of it. Today there is no Salesforce MCP
+// connector configured (see _crm_connector.mjs), so every record here is
+// LOCAL SYNTHETIC DATA — labeled as such everywhere, never presented as if
+// it came from a real CRM. Swapping in a real Salesforce connector later
+// only requires implementing _crm_connector.mjs; nothing here changes.
+//
+// Safety by construction, not by a toggle a developer could forget to
+// check: there is no send-email/message/sequence tool defined anywhere in
+// gtm-ops-agent.mjs, so the model has nothing "dangerous" it could call
+// even if it wanted to. The one write-shaped tool (propose_crm_action) only
+// ever returns a proposal; confirm-crm-action.mjs is the sole place an
+// action could execute, and it defaults to dry-run (ALLOW_SALESFORCE_WRITES
+// unset) and only ever allows Task/Note.
+const OPS_DEFAULT_QUESTION = "Which accounts should I prioritize this week?";
 
-// CLAUDE_CHAT.messages is the raw Anthropic-format conversation (source of
-// truth resent to the server every turn, since a Netlify Function is
-// stateless). CLAUDE_CHAT.timeline is a UI-only display log built as events
-// happen, so the transcript reads like a real chat instead of raw JSON.
-const CLAUDE_CHAT = { messages: [], timeline: [], pendingApproval: null, heldToolResults: [], status: "idle", error: null, crm: [], showTechnical: false };
+const OPS_STATE = {
+  status: "idle",       // idle | loading | error
+  error: null,
+  question: OPS_DEFAULT_QUESTION,
+  messages: [],
+  ranking: [],
+  dataSource: null,
+  pendingApproval: null,  // { tool_use_id, input: { accountId, actionType, ... } }
+  heldToolResults: [],
+  proposals: {},          // accountId -> { input, result } once resolved (approved or rejected)
+  evidenceOpen: {},        // accountId -> bool
+  hasAsked: false,
+};
 
-function claudeTimelinePush(entry) { CLAUDE_CHAT.timeline.push(entry); }
+async function opsAsk(question) {
+  const q = (question || "").trim();
+  if (!q || OPS_STATE.status === "loading" || OPS_STATE.pendingApproval) return;
 
-async function claudeChatContinue(messagesToSend) {
-  CLAUDE_CHAT.messages = messagesToSend;
-  CLAUDE_CHAT.status = "loading";
-  CLAUDE_CHAT.error = null;
+  OPS_STATE.status = "loading";
+  OPS_STATE.error = null;
+  OPS_STATE.hasAsked = true;
+  const messagesToSend = [...OPS_STATE.messages, { role: "user", content: q }];
   render();
 
   try {
-    const res = await fetch("/.netlify/functions/claude-agent-chat", {
+    const res = await fetch("/.netlify/functions/gtm-ops-agent", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ messages: messagesToSend }),
@@ -2398,184 +2413,196 @@ async function claudeChatContinue(messagesToSend) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
-    const newTurns = data.messages.slice(messagesToSend.length);
-    for (const turn of newTurns) {
-      if (turn.role !== "assistant") continue;
-      for (const block of turn.content) {
-        if (block.type === "text" && block.text.trim()) {
-          claudeTimelinePush({ type: "assistant", text: block.text });
-        } else if (block.type === "tool_use") {
-          claudeTimelinePush({ type: "tool", name: block.name, input: block.input });
-        }
-      }
+    OPS_STATE.messages = data.messages;
+    OPS_STATE.dataSource = data.data_source;
+    if (data.ranking && data.ranking.length > 0) {
+      OPS_STATE.ranking = data.ranking;
     }
 
-    CLAUDE_CHAT.messages = data.messages;
-
     if (data.pending_approval) {
-      CLAUDE_CHAT.pendingApproval = data.pending_approval;
-      CLAUDE_CHAT.heldToolResults = data.held_tool_results || [];
-      CLAUDE_CHAT.status = "awaiting_approval";
+      OPS_STATE.pendingApproval = data.pending_approval;
+      OPS_STATE.heldToolResults = data.held_tool_results || [];
+      OPS_STATE.status = "idle";
     } else {
-      CLAUDE_CHAT.pendingApproval = null;
-      CLAUDE_CHAT.heldToolResults = [];
-      CLAUDE_CHAT.status = "idle";
+      OPS_STATE.pendingApproval = null;
+      OPS_STATE.heldToolResults = [];
+      OPS_STATE.status = "idle";
       if (data.limit_reached) {
-        claudeTimelinePush({ type: "note", text: "Se alcanzo el limite de pasos de este demo. Escribe otro mensaje para continuar." });
+        OPS_STATE.error = "The agent hit this demo's step limit before finishing. Try asking again.";
       }
     }
   } catch (err) {
-    CLAUDE_CHAT.error = err.message;
-    CLAUDE_CHAT.status = "error";
+    OPS_STATE.error = err.message;
+    OPS_STATE.status = "error";
   }
   render();
 }
 
-function claudeEnviarMensaje(texto) {
-  const limpio = (texto || "").trim();
-  if (!limpio || CLAUDE_CHAT.status === "loading" || CLAUDE_CHAT.pendingApproval) return;
-  claudeTimelinePush({ type: "user", text: limpio });
-  const messagesToSend = [...CLAUDE_CHAT.messages, { role: "user", content: limpio }];
-  claudeChatContinue(messagesToSend);
+function opsPrepareAction(accountId) {
+  opsAsk(`Prepare a follow-up task for account ${accountId}.`);
 }
 
-function claudeAprobarChat(aprobado) {
-  const pending = CLAUDE_CHAT.pendingApproval;
+async function opsResolveApproval(approved) {
+  const pending = OPS_STATE.pendingApproval;
   if (!pending) return;
-  const approvalResult = {
-    type: "tool_result",
-    tool_use_id: pending.tool_use_id,
-    content: aprobado
-      ? "Aprobado por el usuario: guardado localmente en el CRM demo del navegador."
-      : "Rechazado por el usuario: no guardar esta cuenta en el CRM demo.",
-  };
-  if (aprobado) {
-    CLAUDE_CHAT.crm.push({ ...pending.input });
-    claudeTimelinePush({ type: "note", text: `Guardado en el CRM demo: "${pending.input.nombre}" (tier ${pending.input.tier}).` });
-  } else {
-    claudeTimelinePush({ type: "note", text: `Rechazado: no se guardo "${pending.input.nombre}" en el CRM demo.` });
+  const accountId = pending.input.accountId;
+
+  OPS_STATE.status = "loading";
+  render();
+
+  let confirmResult = { executed: false, status: "REJECTED", message: "You chose not to approve this action — nothing was proposed to Salesforce." };
+  if (approved) {
+    try {
+      const res = await fetch("/.netlify/functions/confirm-crm-action", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: pending.input }),
+      });
+      confirmResult = await res.json();
+    } catch (err) {
+      confirmResult = { executed: false, status: "ERROR", message: err.message };
+    }
   }
-  const messagesToSend = [...CLAUDE_CHAT.messages, { role: "user", content: [...CLAUDE_CHAT.heldToolResults, approvalResult] }];
-  CLAUDE_CHAT.pendingApproval = null;
-  CLAUDE_CHAT.heldToolResults = [];
-  claudeChatContinue(messagesToSend);
+
+  OPS_STATE.proposals[accountId] = { input: pending.input, result: confirmResult };
+
+  const ackResult = { type: "tool_result", tool_use_id: pending.tool_use_id, content: confirmResult.message };
+  OPS_STATE.messages = [...OPS_STATE.messages, { role: "user", content: [...OPS_STATE.heldToolResults, ackResult] }];
+  OPS_STATE.pendingApproval = null;
+  OPS_STATE.heldToolResults = [];
+  OPS_STATE.status = "idle";
+  render();
 }
 
-function claudePreguntarCuenta(nombre) {
-  claudeEnviarMensaje(`Califica la cuenta "${nombre}" y, si es tier A o B, redacta su outreach.`);
+function opsToggleEvidence(accountId) {
+  OPS_STATE.evidenceOpen[accountId] = !OPS_STATE.evidenceOpen[accountId];
+  render();
 }
 
-function renderClaudeAgentDemo() {
-  const busy = CLAUDE_CHAT.status === "loading" || !!CLAUDE_CHAT.pendingApproval;
+function opsPriorityColor(priority) {
+  if (priority === "High") return "var(--tier-a)";
+  if (priority === "Medium") return "var(--tier-b)";
+  return "var(--tier-c)";
+}
 
-  const bubbles = CLAUDE_CHAT.timeline
-    .filter((t) => CLAUDE_CHAT.showTechnical || t.type !== "tool")
-    .map((t) => {
-      if (t.type === "user") return `<div class="chat-row user"><div class="chat-bubble user">${esc(t.text)}</div></div>`;
-      if (t.type === "assistant") return `<div class="chat-row agent"><div class="chat-bubble agent">${esc(t.text)}</div></div>`;
-      if (t.type === "tool") return `<div class="chat-row agent"><span class="chat-tool-chip">${esc(t.name)}(${esc(JSON.stringify(t.input))})</span></div>`;
-      if (t.type === "note") return `<div class="chat-row agent"><span class="chat-tool-chip" style="color:var(--good);border-color:var(--good)">${esc(t.text)}</span></div>`;
-      return "";
-    }).join("");
+function opsRenderEvidence(item) {
+  return `
+    <div style="margin-top:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12px">
+      <div style="margin-bottom:6px;color:var(--muted)">Raw records behind this recommendation (dataSource: ${esc(item.account.dataSource)}):</div>
+      <div style="margin-bottom:4px"><strong>Account:</strong> ${esc(item.account.Name)} — ${esc(item.account.Industry)}, ${item.account.NumberOfEmployees} employees, ${esc(item.account.BillingCountry)}</div>
+      <div style="margin-bottom:4px"><strong>Contacts:</strong> ${item.contacts.length === 0 ? "none on file" : item.contacts.map((c) => `${esc(c.Name)} (${esc(c.Title)})`).join(", ")}</div>
+      <div style="margin-bottom:4px"><strong>Opportunities:</strong> ${item.opportunities.length === 0 ? "none on file" : item.opportunities.map((o) => `${esc(o.Name)} — ${esc(o.StageName)}, $${o.Amount.toLocaleString()}, last activity ${esc(o.LastActivityDate)}`).join("; ")}</div>
+      <div><strong>Tasks:</strong> ${item.tasks.length === 0 ? "none on file" : item.tasks.map((t) => `${esc(t.Subject)} (${esc(t.ActivityDate)})`).join("; ")}</div>
+    </div>`;
+}
 
-  const approvalCard = CLAUDE_CHAT.pendingApproval ? `
-    <div class="chat-row agent">
-      <div class="chat-approval-card">
-        ${CLAUDE_CHAT.pendingApproval.input.mensaje ? `<p style="margin:0 0 8px;font-size:13.5px">${esc(CLAUDE_CHAT.pendingApproval.input.mensaje)}</p>` : ""}
-        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">¿Guardo a ${esc(CLAUDE_CHAT.pendingApproval.input.nombre)} en el CRM demo? (tier ${esc(CLAUDE_CHAT.pendingApproval.input.tier)})</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn primary small" id="claude-aprobar-si">Si, guardar</button>
-          <button class="btn small" id="claude-aprobar-no">No</button>
+function opsRenderProposal(item) {
+  const accountId = item.account.Id;
+  const resolved = OPS_STATE.proposals[accountId];
+  const pendingHere = OPS_STATE.pendingApproval && OPS_STATE.pendingApproval.input.accountId === accountId ? OPS_STATE.pendingApproval : null;
+
+  if (resolved) {
+    return `
+      <div style="margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">Proposed CRM action — ${esc(resolved.input.actionType)}</div>
+        <div class="claude-status ${resolved.result.executed ? "ok" : ""}">${esc(resolved.result.message)}</div>
+      </div>`;
+  }
+
+  if (pendingHere) {
+    const a = pendingHere.input;
+    return `
+      <div style="margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:6px">Proposed CRM action</div>
+        <div style="font-size:13px;line-height:1.7">
+          Object: ${esc(a.actionType)}<br>
+          Related account: ${esc(item.account.Name)}<br>
+          Owner: ${esc(a.owner)}<br>
+          ${a.dueDate ? `Due date: ${esc(a.dueDate)}<br>` : ""}
+          Description: ${esc(a.description)}
         </div>
+        <div style="margin-top:6px"><span class="approval-pill">NOT EXECUTED</span></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn primary small" data-approve="${esc(accountId)}">Approve CRM action</button>
+          <button class="btn small" data-reject="${esc(accountId)}">Cancel</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Dry-run only — no Salesforce record will be changed.</div>
+      </div>`;
+  }
+
+  return `<button class="btn small" data-prepare="${esc(accountId)}" ${OPS_STATE.status === "loading" || OPS_STATE.pendingApproval ? "disabled" : ""}>Prepare action</button>`;
+}
+
+function renderOpsConsole() {
+  const busy = OPS_STATE.status === "loading";
+
+  const cards = OPS_STATE.ranking.map((item, i) => `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>${i + 1}. ${esc(item.account.Name)}</h2>
+        <span class="tag" style="color:#fff;background:${opsPriorityColor(item.priority)};border-color:${opsPriorityColor(item.priority)}">Priority: ${esc(item.priority)}</span>
       </div>
-    </div>` : "";
+      <div style="padding:14px 16px">
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:4px">Signals</div>
+        <ul style="margin:0 0 12px;padding-left:18px;font-size:13.5px;line-height:1.8">
+          ${item.signals.map((s) => `<li style="${s.present ? "" : "color:var(--muted)"}">${s.present ? esc(s.label) : `No signal: ${esc(s.label)}`}</li>`).join("")}
+        </ul>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:2px">Why now</div>
+        <p style="margin:0 0 12px;font-size:13.5px">${esc(item.why_now)}</p>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:2px">Recommended next action</div>
+        <p style="margin:0 0 12px;font-size:13.5px">${esc(item.recommended_action)}</p>
+        ${item.suggested_outreach_draft ? `
+          <div style="font-size:12.5px;color:var(--muted);margin-bottom:2px">Suggested outreach — DRAFT ONLY, not sent</div>
+          <p style="margin:0 0 12px;font-size:13.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:10px">${esc(item.suggested_outreach_draft)}</p>
+        ` : ""}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn small" data-evidence="${esc(item.account.Id)}">${OPS_STATE.evidenceOpen[item.account.Id] ? "Hide" : "View"} Salesforce evidence</button>
+          ${opsRenderProposal(item)}
+        </div>
+        ${OPS_STATE.evidenceOpen[item.account.Id] ? opsRenderEvidence(item) : ""}
+      </div>
+    </div>`).join("");
 
   const wrap = el(`<div>
     <div class="page-head">
-      <h1>Claude Agent (Demo)</h1>
-      <p>Chatea con un agente de GTM AI Operations. Todo es ficticio — 5 cuentas de prueba, nada se envia ni se guarda en un CRM real.</p>
-      <ul style="margin:10px 0 0;padding-left:18px;font-size:12.5px;color:var(--muted);line-height:1.9">
-        <li>Listar las 5 cuentas demo</li>
-        <li>Calificarlas (score de ICP, tier A/B/C, ruteo)</li>
-        <li>Redactar el mensaje de outreach para tier A/B</li>
-        <li>Guardarlas en el CRM demo local, con tu aprobacion antes de cada guardado</li>
-        <li>Responder preguntas sobre esas cuentas (stack, señales de compra, etc.)</li>
-      </ul>
+      <h1>AI Ops Console (Demo)</h1>
+      <p>Salesforce is the system of record; this console is an intelligence and orchestration layer on top of it — it never replaces your CRM.</p>
     </div>
 
-    <div class="panel" style="display:flex;flex-direction:column;height:560px">
-      <div class="panel-head">
-        <h2>Chat con el agente</h2>
-        <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);cursor:pointer">
-          <input type="checkbox" id="claude-toggle-technical" ${CLAUDE_CHAT.showTechnical ? "checked" : ""}> Ver detalles tecnicos
-        </label>
-      </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <span class="rail-badge" style="background:rgba(220,38,38,.12);color:var(--bad);display:inline-flex">DEMO MODE — READ ONLY</span>
+      <span class="tag">Data source: ${OPS_STATE.dataSource === "salesforce" ? "Salesforce" : "Local synthetic dataset (not Salesforce)"}</span>
+    </div>
 
-      <div id="claude-chat-timeline" class="chat-thread" style="flex:1;padding:16px;overflow-y:auto">
-        ${CLAUDE_CHAT.timeline.length === 0 ? `
-          <div class="chat-row agent"><div class="chat-bubble agent">Hola, soy el agente de GTM AI Operations de esta demo. Puedo calificar cuentas y redactar outreach. Pregúntame algo, o toca una cuenta abajo.</div></div>
-        ` : bubbles}
-        ${CLAUDE_CHAT.status === "loading" ? '<div class="chat-row agent"><div class="chat-typing">escribiendo...</div></div>' : ""}
-        ${CLAUDE_CHAT.status === "error" ? `<div class="chat-row agent"><div class="chat-bubble agent" style="color:var(--bad)">Error: ${esc(CLAUDE_CHAT.error)}</div></div>` : ""}
-        ${approvalCard}
-      </div>
-
-      <div style="padding:10px 16px 6px;display:flex;gap:6px;flex-wrap:wrap">
-        ${CLAUDE_CUENTAS_DEMO.map((c) => `<button class="btn small" data-account="${esc(c.nombre)}" ${busy ? "disabled" : ""}>${esc(c.nombre.replace(" (Demo)", ""))}</button>`).join("")}
-      </div>
-
-      <div style="display:flex;gap:8px;padding:10px 16px 16px">
-        <input type="text" id="claude-chat-input" placeholder="Escribe un mensaje..." ${busy ? "disabled" : ""}
-          style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:20px;padding:10px 16px;font-family:var(--font-body);font-size:13.5px">
-        <button class="btn primary small" id="claude-chat-send" ${busy ? "disabled" : ""} style="border-radius:20px;padding:0 18px">Enviar</button>
+    <div class="panel">
+      <div style="padding:14px 16px;display:flex;gap:8px">
+        <input type="text" id="ops-question-input" value="${esc(OPS_STATE.question)}" ${busy ? "disabled" : ""}
+          style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:10px 12px;font-family:var(--font-body);font-size:13.5px">
+        <button class="btn primary" id="ops-ask-btn" ${busy ? "disabled" : ""}>${busy ? "Analyzing..." : "Ask"}</button>
       </div>
     </div>
 
-    ${CLAUDE_CHAT.crm.length > 0 ? `
-      <div class="panel">
-        <div class="panel-head"><h2>CRM demo (este navegador)</h2><span class="hint">${CLAUDE_CHAT.crm.length} registro(s)</span></div>
-        <table>
-          <thead><tr><th>Cuenta</th><th>Score</th><th>Tier</th><th>Ruteo</th></tr></thead>
-          <tbody>
-            ${[...CLAUDE_CHAT.crm].sort((a, b) => b.score - a.score).map((r) => `
-              <tr><td>${esc(r.nombre)}</td><td>${esc(String(r.score))}</td><td>${esc(r.tier)}</td><td>${esc(r.ruteo)}</td></tr>`).join("")}
-          </tbody>
-        </table>
-      </div>` : ""}
+    ${OPS_STATE.error ? `<div class="panel"><div style="padding:14px 16px" class="claude-status err">${esc(OPS_STATE.error)}</div></div>` : ""}
+
+    ${!OPS_STATE.hasAsked && OPS_STATE.ranking.length === 0 ? `
+      <div class="panel"><p style="padding:14px 16px;margin:0;color:var(--muted);font-size:13px">Ask the question above to see a ranked, evidence-backed list of accounts.</p></div>
+    ` : cards}
 
     <p style="font-size:11.5px;color:var(--muted);max-width:680px">
-      El codigo real del SDK (Python, <span class="tag">ClaudeSDKClient</span>, <span class="tag">can_use_tool</span>) esta en <span class="tag">/gtm-agent-demo</span> de este repo. Esta pagina llama en su lugar a <span class="tag">netlify/functions/claude-agent-chat.mjs</span>, que reimplementa el mismo bucle de herramientas con la API de Claude directamente, porque una funcion serverless no puede alojar el proceso de larga duracion que el SDK necesita.
+      No tool that could send an email, a message, or enroll anyone in a sequence exists anywhere in this agent's code — not disabled, simply never defined. The real Claude Agent SDK (Python) implementation lives in <span class="tag">/gtm-agent-demo</span>; this console calls <span class="tag">netlify/functions/gtm-ops-agent.mjs</span> instead, for the same reason described there — a serverless function can't host the SDK's long-lived process.
     </p>
   </div>`);
 
-  wrap.querySelectorAll("[data-account]").forEach((btn) => {
-    btn.addEventListener("click", () => claudePreguntarCuenta(btn.dataset.account));
-  });
+  const input = wrap.querySelector("#ops-question-input");
+  const askBtn = wrap.querySelector("#ops-ask-btn");
+  const doAsk = () => { OPS_STATE.question = input.value; opsAsk(input.value); };
+  if (askBtn) askBtn.addEventListener("click", doAsk);
+  if (input) input.addEventListener("keydown", (e) => { if (e.key === "Enter") doAsk(); });
 
-  const input = wrap.querySelector("#claude-chat-input");
-  const sendBtn = wrap.querySelector("#claude-chat-send");
-  const doSend = () => {
-    if (!input) return;
-    const value = input.value;
-    input.value = "";
-    claudeEnviarMensaje(value);
-  };
-  if (sendBtn) sendBtn.addEventListener("click", doSend);
-  if (input) {
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
-    if (!busy) input.focus();
-  }
-
-  const toggle = wrap.querySelector("#claude-toggle-technical");
-  if (toggle) toggle.addEventListener("change", () => { CLAUDE_CHAT.showTechnical = toggle.checked; render(); });
-
-  const timelineEl = wrap.querySelector("#claude-chat-timeline");
-  if (timelineEl) timelineEl.scrollTop = timelineEl.scrollHeight;
-
-  const siBtn = wrap.querySelector("#claude-aprobar-si");
-  const noBtn = wrap.querySelector("#claude-aprobar-no");
-  if (siBtn) siBtn.addEventListener("click", () => claudeAprobarChat(true));
-  if (noBtn) noBtn.addEventListener("click", () => claudeAprobarChat(false));
+  wrap.querySelectorAll("[data-evidence]").forEach((btn) => btn.addEventListener("click", () => opsToggleEvidence(btn.dataset.evidence)));
+  wrap.querySelectorAll("[data-prepare]").forEach((btn) => btn.addEventListener("click", () => opsPrepareAction(btn.dataset.prepare)));
+  wrap.querySelectorAll("[data-approve]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(true)));
+  wrap.querySelectorAll("[data-reject]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(false)));
 
   return wrap;
 }
