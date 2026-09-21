@@ -31,15 +31,48 @@ guardrails y aprobación humana antes de una acción sensible.
     antes de cada llamada a `save_to_crm`, con las opciones `s` (sí),
     `n` (no) y `t` (sí a todas las siguientes).
 - **Log visible de cada paso**: cada `ToolUseBlock` que el agente ejecuta se
-  imprime en la consola con su nombre y su entrada, y al final se muestra una
-  tabla resumen ordenada por score.
+  imprime en la consola (o en el chat, en la version web) con su nombre y su
+  entrada, y al final se muestra una tabla resumen ordenada por score.
+- **Dos interfaces sobre la misma logica**: `agente.py` (terminal) y
+  `chat_app.py` (chat en el navegador con Streamlit) comparten toda la logica
+  de negocio, las herramientas y el subagente a traves de `gtm_agent_core.py`
+  — no hay codigo duplicado entre ambas.
 
 ## Requisitos
 
 - Python 3.10+
 - Una API key de Anthropic válida (no incluida en este repositorio)
 
-## Cómo correrlo
+## Interfaz de chat en el navegador
+
+Ademas del script de terminal, hay una app de [Streamlit](https://streamlit.io)
+(`chat_app.py`) con un cuadro de chat para hablar con el mismo agente desde el
+navegador. **Corre solo en tu propia maquina** (`localhost`); no es un deploy
+publico ni un servicio hospedado.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-web.txt
+
+export ANTHROPIC_API_KEY="tu_api_key_aqui"
+
+streamlit run chat_app.py
+```
+
+Esto abre `http://localhost:8501` en tu navegador. Ahi puedes:
+
+- Escribir instrucciones libres ("procesa la cuenta Acme Textiles", "cual es
+  el score de Nebula Software") en el cuadro de chat.
+- Usar el botón "Procesar todas las cuentas demo" en la barra lateral para
+  correr el flujo completo, igual que en el CLI.
+- Ver cada herramienta que el agente llama como una tarjeta en el chat.
+- Aprobar, rechazar o aprobar-todas las escrituras a `save_to_crm` con botones
+  en el propio chat (el mismo guardrail humano que en la terminal, con `s`/`n`/`t`
+  reemplazados por botones).
+- Ver la tabla del CRM demo actualizada en vivo en la barra lateral.
+
+## Cómo correrlo (version de terminal)
 
 ### macOS / Linux
 
@@ -85,9 +118,12 @@ Mensaje: ...
 
 ```
 gtm-agent-demo/
-├── agente.py           # Agente principal (ClaudeSDKClient, herramientas, subagente, guardrails)
-├── requirements.txt     # claude-agent-sdk==0.1.73
-├── run_agente.ps1        # Script de arranque para Windows
+├── gtm_agent_core.py     # Cuentas demo, scoring, herramientas MCP, subagente y ClaudeAgentOptions compartidas
+├── agente.py             # Interfaz de terminal (CLI)
+├── chat_app.py           # Interfaz de chat en el navegador (Streamlit)
+├── requirements.txt      # Dependencias para el CLI (claude-agent-sdk, mcp)
+├── requirements-web.txt  # requirements.txt + streamlit, para chat_app.py
+├── run_agente.ps1        # Script de arranque para Windows (CLI)
 ├── crm_demo.json         # (se genera al correr el agente; ignorado por git)
 └── README.md
 ```
