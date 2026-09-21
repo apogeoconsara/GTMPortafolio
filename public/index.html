@@ -2363,71 +2363,109 @@ const CLAUDE_CUENTAS_DEMO = [
   { nombre: "FinTech Horizonte (Demo)", industria: "Fintech", empleados: 250, pais: "Argentina" },
 ];
 
-const CLAUDE_STATE = { selected: null, status: "idle", result: null, error: null, log: [], crm: [] };
+// CLAUDE_CHAT.messages is the raw Anthropic-format conversation (source of
+// truth resent to the server every turn, since a Netlify Function is
+// stateless). CLAUDE_CHAT.timeline is a UI-only display log built as events
+// happen, so the transcript reads like a real chat instead of raw JSON.
+const CLAUDE_CHAT = { messages: [], timeline: [], pendingApproval: null, heldToolResults: [], status: "idle", error: null, crm: [] };
 
-function claudeLog(line) { CLAUDE_STATE.log.push(line); }
+function claudeTimelinePush(entry) { CLAUDE_CHAT.timeline.push(entry); }
 
-async function claudeProcesarCuenta(nombre) {
-  CLAUDE_STATE.selected = nombre;
-  CLAUDE_STATE.status = "loading";
-  CLAUDE_STATE.error = null;
-  CLAUDE_STATE.result = null;
-  CLAUDE_STATE.log = [`Herramienta: get_account("${nombre}")`, `Herramienta: score_icp("${nombre}")`];
+async function claudeChatContinue(messagesToSend) {
+  CLAUDE_CHAT.messages = messagesToSend;
+  CLAUDE_CHAT.status = "loading";
+  CLAUDE_CHAT.error = null;
   render();
 
   try {
-    const res = await fetch("/.netlify/functions/claude-agent", {
+    const res = await fetch("/.netlify/functions/claude-agent-chat", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ account_name: nombre }),
+      body: JSON.stringify({ messages: messagesToSend }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
-    if (data.meta && data.meta.source === "live_anthropic") {
-      claudeLog(`Subagente "redactor" (Claude, ${data.meta.model}) escribio el mensaje de outreach — ${data.meta.output_tokens} tokens de salida, ~$${data.meta.estimated_cost_usd.toFixed(5)}`);
-    } else {
-      claudeLog(`Tier C: se uso el mensaje fijo (no se llamo a Claude, sin costo)`);
+    const newTurns = data.messages.slice(messagesToSend.length);
+    for (const turn of newTurns) {
+      if (turn.role !== "assistant") continue;
+      for (const block of turn.content) {
+        if (block.type === "text" && block.text.trim()) {
+          claudeTimelinePush({ type: "assistant", text: block.text });
+        } else if (block.type === "tool_use") {
+          claudeTimelinePush({ type: "tool", name: block.name, input: block.input });
+        }
+      }
     }
-    claudeLog(`Esperando aprobacion humana antes de save_to_crm...`);
 
-    CLAUDE_STATE.result = data;
-    CLAUDE_STATE.status = "awaiting_approval";
+    CLAUDE_CHAT.messages = data.messages;
+
+    if (data.pending_approval) {
+      CLAUDE_CHAT.pendingApproval = data.pending_approval;
+      CLAUDE_CHAT.heldToolResults = data.held_tool_results || [];
+      CLAUDE_CHAT.status = "awaiting_approval";
+    } else {
+      CLAUDE_CHAT.pendingApproval = null;
+      CLAUDE_CHAT.heldToolResults = [];
+      CLAUDE_CHAT.status = "idle";
+      if (data.limit_reached) {
+        claudeTimelinePush({ type: "note", text: "Se alcanzo el limite de pasos de este demo. Escribe otro mensaje para continuar." });
+      }
+    }
   } catch (err) {
-    CLAUDE_STATE.error = err.message;
-    CLAUDE_STATE.status = "error";
+    CLAUDE_CHAT.error = err.message;
+    CLAUDE_CHAT.status = "error";
   }
   render();
 }
 
-function claudeAprobar(aprobado) {
-  const r = CLAUDE_STATE.result;
+function claudeEnviarMensaje(texto) {
+  const limpio = (texto || "").trim();
+  if (!limpio || CLAUDE_CHAT.status === "loading" || CLAUDE_CHAT.pendingApproval) return;
+  claudeTimelinePush({ type: "user", text: limpio });
+  const messagesToSend = [...CLAUDE_CHAT.messages, { role: "user", content: limpio }];
+  claudeChatContinue(messagesToSend);
+}
+
+function claudeAprobarChat(aprobado) {
+  const pending = CLAUDE_CHAT.pendingApproval;
+  if (!pending) return;
+  const approvalResult = {
+    type: "tool_result",
+    tool_use_id: pending.tool_use_id,
+    content: aprobado
+      ? "Aprobado por el usuario: guardado localmente en el CRM demo del navegador."
+      : "Rechazado por el usuario: no guardar esta cuenta en el CRM demo.",
+  };
   if (aprobado) {
-    CLAUDE_STATE.crm.push({ nombre: r.nombre, score: r.score, tier: r.tier, ruteo: r.ruteo, razon: r.razon, mensaje: r.mensaje });
-    claudeLog(`[CRM DEMO] Guardado localmente (solo en este navegador) para "${r.nombre}" — tier ${r.tier}.`);
+    CLAUDE_CHAT.crm.push({ ...pending.input });
+    claudeTimelinePush({ type: "note", text: `Guardado en el CRM demo: "${pending.input.nombre}" (tier ${pending.input.tier}).` });
   } else {
-    claudeLog(`Rechazado: no se guardo "${r.nombre}" en el CRM demo.`);
+    claudeTimelinePush({ type: "note", text: `Rechazado: no se guardo "${pending.input.nombre}" en el CRM demo.` });
   }
-  CLAUDE_STATE.status = "idle";
-  CLAUDE_STATE.result = null;
-  render();
+  const messagesToSend = [...CLAUDE_CHAT.messages, { role: "user", content: [...CLAUDE_CHAT.heldToolResults, approvalResult] }];
+  claudeChatContinue(messagesToSend);
+}
+
+function claudePreguntarCuenta(nombre) {
+  claudeEnviarMensaje(`Califica la cuenta "${nombre}" y, si es tier A o B, redacta su outreach.`);
 }
 
 function renderClaudeAgentDemo() {
   const wrap = el(`<div>
     <div class="page-head">
       <h1>Claude Agent (Demo)</h1>
-      <p>Agente de GTM AI Operations construido con el Claude Agent SDK para Python. Esta pagina corre una version equivalente en el navegador; el codigo original del SDK esta en <span class="tag">/gtm-agent-demo</span> de este mismo repositorio.</p>
+      <p>Agente conversacional de GTM AI Operations construido con el Claude Agent SDK para Python. Esta pagina corre una version equivalente en el navegador; el codigo original del SDK esta en <span class="tag">/gtm-agent-demo</span> de este mismo repositorio.</p>
     </div>
 
     <div class="cfg-note" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12.5px;color:var(--text)">
-      <strong>Todo aqui es ficticio.</strong> Las 5 cuentas estan marcadas "(Demo)" y no son las empresas reales del motor principal de este sitio. No se envia ningun correo ni se escribe en ningun CRM real: "guardar" solo agrega una fila a una tabla que vive en tu navegador y se borra al recargar.
+      <strong>Todo aqui es ficticio.</strong> Las 5 cuentas estan marcadas "(Demo)" y no son las empresas reales del motor principal de este sitio. No se envia ningun correo ni se escribe en ningun CRM real: "guardar" solo agrega una fila a una tabla que vive en tu navegador y se borra al recargar. El agente solo puede hablar de estas 5 cuentas.
       <br><br>
-      <strong>Como funciona esta version:</strong> el demo original (carpeta <span class="tag">/gtm-agent-demo</span>) usa <span class="tag">claude-agent-sdk</span> (ClaudeSDKClient, create_sdk_mcp_server, AgentDefinition, can_use_tool) desde Python. Esa libreria necesita un proceso de larga duracion que una funcion serverless de Netlify no puede alojar, asi que esta pagina llama en su lugar a una funcion (<span class="tag">netlify/functions/claude-agent.mjs</span>) que reimplementa las mismas reglas de scoring y el mismo paso de redaccion, con una llamada directa a la API de Claude (modelo <span class="tag">claude-sonnet-5</span>) usando la API key del dueño del sitio, guardada solo como variable de entorno de Netlify.
+      <strong>Como funciona esta version:</strong> el demo original (carpeta <span class="tag">/gtm-agent-demo</span>) usa <span class="tag">claude-agent-sdk</span> (ClaudeSDKClient, create_sdk_mcp_server, AgentDefinition, can_use_tool) desde Python. Esa libreria necesita un proceso de larga duracion que una funcion serverless de Netlify no puede alojar, asi que este chat llama en su lugar a una funcion (<span class="tag">netlify/functions/claude-agent-chat.mjs</span>) que reimplementa el mismo bucle de herramientas (tool use) con una llamada directa a la API de Claude (modelo <span class="tag">claude-sonnet-5</span>), usando la API key del dueño del sitio guardada solo como variable de entorno de Netlify.
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Cuentas demo</h2><span class="hint">elige una para calificarla y redactar su outreach</span></div>
+      <div class="panel-head"><h2>Cuentas demo</h2><span class="hint">clic para preguntarle al agente por una</span></div>
       <table>
         <thead><tr><th>Cuenta</th><th>Industria</th><th>Empleados</th><th>Pais</th><th></th></tr></thead>
         <tbody>
@@ -2437,54 +2475,83 @@ function renderClaudeAgentDemo() {
               <td>${esc(c.industria)}</td>
               <td>${c.empleados}</td>
               <td>${esc(c.pais)}</td>
-              <td><button class="btn small primary" data-account="${esc(c.nombre)}" ${CLAUDE_STATE.status === "loading" ? "disabled" : ""}>Procesar</button></td>
+              <td><button class="btn small" data-account="${esc(c.nombre)}" ${CLAUDE_CHAT.status === "loading" || CLAUDE_CHAT.pendingApproval ? "disabled" : ""}>Preguntar</button></td>
             </tr>`).join("")}
         </tbody>
       </table>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Log del agente</h2><span class="hint">cada herramienta que se llama, en orden</span></div>
-      <div style="padding:14px 16px">
-        ${CLAUDE_STATE.status === "idle" && CLAUDE_STATE.log.length === 0
-          ? '<p style="margin:0;color:var(--muted);font-size:13px">Elige una cuenta arriba para empezar.</p>'
-          : CLAUDE_STATE.log.map((l) => `<div class="claude-status" style="margin-bottom:4px">${esc(l)}</div>`).join("")}
-        ${CLAUDE_STATE.status === "loading" ? '<div class="claude-status">Consultando al agente...</div>' : ""}
-        ${CLAUDE_STATE.status === "error" ? `<div class="claude-status err">Error: ${esc(CLAUDE_STATE.error)}</div>` : ""}
-        ${CLAUDE_STATE.status === "awaiting_approval" && CLAUDE_STATE.result ? `
+      <div class="panel-head"><h2>Chat con el agente</h2><span class="hint">escribe libremente, en espanol</span></div>
+      <div id="claude-chat-timeline" style="padding:14px 16px;max-height:420px;overflow-y:auto">
+        ${CLAUDE_CHAT.timeline.length === 0
+          ? '<p style="margin:0;color:var(--muted);font-size:13px">Escribe algo como "que cuentas tienes" o "califica a FinTech Horizonte" para empezar.</p>'
+          : CLAUDE_CHAT.timeline.map((t) => {
+              if (t.type === "user") return `<div style="margin-bottom:10px"><strong>Tu:</strong> ${esc(t.text)}</div>`;
+              if (t.type === "assistant") return `<div style="margin-bottom:10px"><strong>Agente:</strong> ${esc(t.text)}</div>`;
+              if (t.type === "tool") return `<div class="claude-status" style="margin-bottom:6px">Herramienta: ${esc(t.name)}(${esc(JSON.stringify(t.input))})</div>`;
+              if (t.type === "note") return `<div class="claude-status ok" style="margin-bottom:10px">${esc(t.text)}</div>`;
+              return "";
+            }).join("")}
+        ${CLAUDE_CHAT.status === "loading" ? '<div class="claude-status">El agente esta escribiendo...</div>' : ""}
+        ${CLAUDE_CHAT.status === "error" ? `<div class="claude-status err">Error: ${esc(CLAUDE_CHAT.error)}</div>` : ""}
+        ${CLAUDE_CHAT.pendingApproval ? `
           <div style="margin-top:10px;border:1px dashed var(--line);border-radius:8px;padding:12px">
             <div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Aprobacion requerida antes de <span class="tag">save_to_crm</span></div>
-            <div><strong>${esc(CLAUDE_STATE.result.nombre)}</strong> — score ${CLAUDE_STATE.result.score}, tier <strong>${esc(CLAUDE_STATE.result.tier)}</strong>, ruteo: ${esc(CLAUDE_STATE.result.ruteo)}</div>
-            <p style="font-size:13px;margin:8px 0">${esc(CLAUDE_STATE.result.mensaje)}</p>
+            <div><strong>${esc(CLAUDE_CHAT.pendingApproval.input.nombre)}</strong> — score ${esc(String(CLAUDE_CHAT.pendingApproval.input.score))}, tier <strong>${esc(CLAUDE_CHAT.pendingApproval.input.tier)}</strong>, ruteo: ${esc(CLAUDE_CHAT.pendingApproval.input.ruteo)}</div>
+            <p style="font-size:13px;margin:8px 0">${esc(CLAUDE_CHAT.pendingApproval.input.mensaje)}</p>
             <div style="display:flex;gap:10px">
               <button class="btn primary small" id="claude-aprobar-si">Si, guardar</button>
               <button class="btn small" id="claude-aprobar-no">No</button>
             </div>
           </div>` : ""}
       </div>
+      <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line)">
+        <input type="text" id="claude-chat-input" placeholder="Escribe un mensaje para el agente..." ${CLAUDE_CHAT.status === "loading" || CLAUDE_CHAT.pendingApproval ? "disabled" : ""}
+          style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:8px 10px;font-family:var(--font-body);font-size:13px">
+        <button class="btn primary small" id="claude-chat-send" ${CLAUDE_CHAT.status === "loading" || CLAUDE_CHAT.pendingApproval ? "disabled" : ""}>Enviar</button>
+      </div>
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h2>CRM demo (este navegador)</h2><span class="hint">${CLAUDE_STATE.crm.length} registro(s)</span></div>
-      ${CLAUDE_STATE.crm.length === 0
+      <div class="panel-head"><h2>CRM demo (este navegador)</h2><span class="hint">${CLAUDE_CHAT.crm.length} registro(s)</span></div>
+      ${CLAUDE_CHAT.crm.length === 0
         ? '<p style="padding:14px 16px;margin:0;color:var(--muted);font-size:13px">Aun no se ha guardado ninguna cuenta.</p>'
         : `<table>
             <thead><tr><th>Cuenta</th><th>Score</th><th>Tier</th><th>Ruteo</th></tr></thead>
             <tbody>
-              ${[...CLAUDE_STATE.crm].sort((a, b) => b.score - a.score).map((r) => `
-                <tr><td>${esc(r.nombre)}</td><td>${r.score}</td><td>${esc(r.tier)}</td><td>${esc(r.ruteo)}</td></tr>`).join("")}
+              ${[...CLAUDE_CHAT.crm].sort((a, b) => b.score - a.score).map((r) => `
+                <tr><td>${esc(r.nombre)}</td><td>${esc(String(r.score))}</td><td>${esc(r.tier)}</td><td>${esc(r.ruteo)}</td></tr>`).join("")}
             </tbody>
           </table>`}
     </div>
   </div>`);
 
   wrap.querySelectorAll("[data-account]").forEach((btn) => {
-    btn.addEventListener("click", () => claudeProcesarCuenta(btn.dataset.account));
+    btn.addEventListener("click", () => claudePreguntarCuenta(btn.dataset.account));
   });
+
+  const input = wrap.querySelector("#claude-chat-input");
+  const sendBtn = wrap.querySelector("#claude-chat-send");
+  const doSend = () => {
+    if (!input) return;
+    const value = input.value;
+    input.value = "";
+    claudeEnviarMensaje(value);
+  };
+  if (sendBtn) sendBtn.addEventListener("click", doSend);
+  if (input) {
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") doSend(); });
+    if (CLAUDE_CHAT.status !== "loading") input.focus();
+  }
+
+  const timelineEl = wrap.querySelector("#claude-chat-timeline");
+  if (timelineEl) timelineEl.scrollTop = timelineEl.scrollHeight;
+
   const siBtn = wrap.querySelector("#claude-aprobar-si");
   const noBtn = wrap.querySelector("#claude-aprobar-no");
-  if (siBtn) siBtn.addEventListener("click", () => claudeAprobar(true));
-  if (noBtn) noBtn.addEventListener("click", () => claudeAprobar(false));
+  if (siBtn) siBtn.addEventListener("click", () => claudeAprobarChat(true));
+  if (noBtn) noBtn.addEventListener("click", () => claudeAprobarChat(false));
 
   return wrap;
 }
