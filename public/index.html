@@ -683,12 +683,34 @@ function generateAIReasoning(c, signals, score) {
 function stripEvidenceLabel(evidenceText) {
   const m = /^[^:—]{0,60}[:—]\s*(.*)$/s.exec(evidenceText || "");
   let fact = (m ? m[1] : evidenceText || "").trim();
-  // A few company_description clauses carry this demo's own ICP-scoring
-  // commentary (e.g. "headcount exceeds this demo's 2,000-employee
-  // ceiling") — never let that leak into text meant to read like real
-  // outreach copy written to a real contact.
-  fact = fact.split(/;\s*/).filter(clause => !/this demo/i.test(clause)).join("; ");
+  // Parentheticals in this data are sourcing metadata ("(Sep 2026)", "(quoted
+  // from a live X job listing)") — useful for an internal QA trail, never
+  // something you'd say to the actual prospect.
+  fact = fact.replace(/\([^)]*\)/g, " ").replace(/\s{2,}/g, " ").trim();
+  // Some evidence strings bundle several clauses with "; " — this demo's own
+  // ICP-scoring commentary ("headcount exceeds this demo's 2,000-employee
+  // ceiling"), and separately, internal research-process metadata (how a
+  // contact was found: "...was found via Clay contact search", "a verified
+  // work email"). Both are true and useful for QA, but neither is something
+  // you'd ever say to the actual prospect — a real outreach message quotes
+  // the company FACT (the hiring signal, the growth number), never how the
+  // seller's tooling found it. Keep only the first clause that isn't one of
+  // those, since that's reliably the actual signal itself.
+  const clauses = fact.split(/;\s*/).map(s => s.trim()).filter(Boolean)
+    .filter(clause => !/this demo|clay|verified work email|contact search/i.test(clause));
+  fact = clauses[0] || "";
   return fact.replace(/\.+\s*$/, "").trim(); // caller adds its own trailing period
+}
+
+// Pulls just the quoted role title out of an evidence string (e.g. "Open
+// req found via Clay for \"Product Security Engineer\" (Sep 2026)" →
+// "Product Security Engineer"). This is the one piece of a messy, data-mixed
+// evidence string that's always safe and natural to say directly to a
+// prospect — everything else in these strings is internal sourcing
+// narrative, not customer-facing copy.
+function extractQuotedRole(evidenceText) {
+  const m = /"([^"]{2,60})"/.exec(evidenceText || "");
+  return m ? m[1] : null;
 }
 
 function generateOutreach(c, signals, reasoning, persona) {
@@ -699,26 +721,35 @@ function generateOutreach(c, signals, reasoning, persona) {
   }
   const p = primary.toLowerCase();
   const firstName = c.contact.name !== "unknown" ? c.contact.name.split(" ")[0] : null;
-  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const greeting = firstName ? `Hi ${firstName} —` : "Hi —";
   const fact = stripEvidenceLabel(evidence);
 
   // Ground the opener in the literal cited fact where there is one — "saw
   // the actual req/quote" reads as researched; a paraphrase of the signal
-  // category reads as a mail-merge.
-  let hook;
+  // category reads as a mail-merge. Phrasing avoids two things that read as
+  // robotic in a first-touch message: naming HOW the fact was found ("saw
+  // this at X:", a colon before a quote), and burying the ask three
+  // sentences deep.
+  let hook, painLine;
   if (p.includes("hiring")) {
-    hook = fact ? `saw this at ${c.company_name}: ${fact}` : `saw ${c.company_name} is hiring for IT/security`;
+    const role = extractQuotedRole(evidence);
+    hook = role ? `saw you have a ${role} req open` : (fact ? `saw ${c.company_name} is hiring for ${fact}` : `saw ${c.company_name} is hiring for IT/security`);
+    painLine = `Teams usually don't have identity and device access fully owned by the time that role gets filled — often a mix of spreadsheets and whatever each tool bolted on.`;
   } else if (p.includes("remote") || p.includes("distributed")) {
-    hook = fact ? `came across this from ${c.company_name}'s own team: ${fact}` : `noticed ${c.company_name} runs a distributed team`;
+    hook = fact ? `noticed ${c.company_name}'s team is distributed — ${fact}` : `noticed ${c.company_name} runs a distributed team`;
+    painLine = `Distributed teams usually end up managing device and access security across a pile of disconnected tools before anyone officially owns it.`;
   } else if (p.includes("expansion") || p.includes("countries") || p.includes("offices")) {
     hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries — ${c.countries_of_operation.join(", ")}`;
+    painLine = `Every new country usually means another local login quirk or compliance wrinkle nobody's centrally tracking yet.`;
   } else if (p.includes("growth")) {
     hook = `saw ${c.company_name} is growing fast — ${c.estimated_growth}`;
+    painLine = `Headcount that fast usually outpaces whoever owns device and access provisioning, until it becomes an audit finding.`;
   } else {
     hook = `came across ${c.company_name}`;
+    painLine = `Curious how you're currently handling device and access management as the team grows.`;
   }
 
-  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. Teams scaling or spreading out that fast usually end up managing devices and access across a pile of disconnected tools before anyone officially owns it. Curious if that's already on someone's plate at ${c.company_name}, or still nobody's job yet.`;
+  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. ${painLine} Is that already owned at ${c.company_name}, or still nobody's job?`;
   const subject = `${c.company_name} + identity/device access`;
   const cta = "Worth 15 minutes to compare notes — no deck, just a conversation?";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
