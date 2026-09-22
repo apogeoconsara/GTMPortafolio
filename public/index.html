@@ -2257,6 +2257,27 @@ function renderArchitecture() {
     </div>
 
     <div class="panel">
+      <div class="panel-head"><h2>Scheduled daily digest: agent-initiated, not user-initiated</h2><span class="hint">the "Run Daily Digest" button in AI Ops Console simulates this</span></div>
+      <div class="body-pad">
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">Everything above runs when a person opens the console and asks a question. The other mode a real GTM Ops deployment needs is the opposite: the agent runs on its own schedule, before the seller even opens their laptop.</p>
+        <div class="mini-flow">
+          <div class="mf-node">Cron trigger, 7am seller-local time</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Same reasoning loop as AI Ops Console (list signals → evaluate → rank)</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Draft outreach + pipeline-stage note per account</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Gmail draft created (Gmail API, not sent)</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Seller reviews and sends themselves</div>
+        </div>
+        <p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">The "prepare a pre-message" and "note where this account is in the pipeline" pieces are the same <code>submit_prioritization</code> reasoning this demo already runs live — what's different in production is only the trigger (a scheduled Netlify Function / cron instead of a click) and the delivery surface (a real Gmail draft via the Gmail API, created under explicit OAuth scope, instead of this page). It still never sends on its own — a created Gmail <em>draft</em> is not a sent email; the human still presses send.</p>
+        <div class="tech-ref">
+          <span class="k">For developers</span> — the API surface this maps to (designed, not live in this static demo):<br>
+          Scheduled Netlify Function (cron) — reuses gtm-ops-agent.mjs's runLoop() directly, no separate reasoning path to keep in sync<br>
+          POST https://gmail.googleapis.com/gmail/v1/users/me/drafts — one draft per prioritized account, scope gmail.compose only (never gmail.send)<br>
+          Pipeline-stage note sourced from the same opportunities[].StageName already shown in this demo's account evidence
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>Current prototype vs. production integration design</h2><span class="hint">🟢 real today &nbsp; ⚪ designed, not built</span></div>
       <div class="body-pad" style="overflow-x:auto">
         <table class="compare-table">
@@ -2410,7 +2431,19 @@ const OPS_STATE = {
   evidenceOpen: {},        // accountId -> bool
   hasAsked: false,
   autoChainedFor: null,    // accountId already auto-chained into a proposed action, so it only fires once
+  dailyDigestMode: false,  // true once "Run Daily Digest" has been used this session
 };
+
+// Simulates the production design described in Architecture: a scheduled
+// job (e.g. a daily cron-triggered Netlify Function) runs this same
+// prioritization reasoning every morning and drafts a Gmail message per
+// account for the seller to review — never sends automatically. This
+// button runs the real reasoning loop live; only the "arrives in your
+// Gmail every morning" delivery mechanism is simulated, and labeled as such.
+function opsRunDailyDigest() {
+  OPS_STATE.dailyDigestMode = true;
+  opsAsk(OPS_DEFAULT_QUESTION);
+}
 
 function opsToggleTrace() {
   OPS_STATE.traceOpen = !OPS_STATE.traceOpen;
@@ -2647,7 +2680,29 @@ function renderOpsConsole() {
           style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:10px 12px;font-family:var(--font-body);font-size:13.5px">
         <button class="btn primary" id="ops-ask-btn" ${busy ? "disabled" : ""}>${busy ? "Analyzing..." : "Ask"}</button>
       </div>
+      <div style="padding:0 16px 14px 16px">
+        <button class="btn small" id="ops-daily-digest-btn" ${busy ? "disabled" : ""}>Run Daily Digest (simulated)</button>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px">Simulates the scheduled morning run described in Architecture — real reasoning, simulated Gmail delivery</span>
+      </div>
     </div>
+
+    ${OPS_STATE.dailyDigestMode && OPS_STATE.ranking.length > 0 ? `
+      <div class="panel" style="margin-bottom:16px;border-color:var(--accent)">
+        <div class="panel-head"><h2>📧 Daily Digest — simulated Gmail draft</h2></div>
+        <div style="padding:14px 16px">
+          <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">
+            SIMULATED — this demo has no real Gmail connection. In production this is a scheduled job (see Architecture) that runs this same reasoning every morning and creates a real Gmail draft per account, never sends automatically.
+          </div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">Subject: Your ${OPS_STATE.ranking.length} accounts to work today</div>
+          ${OPS_STATE.ranking.map((item, i) => `
+            <div style="border-top:1px solid var(--line);padding:10px 0;font-size:13px">
+              <div style="font-weight:600;margin-bottom:3px">${i + 1}. ${esc(item.account.Name)} — ${esc(item.priority)} priority — pipeline stage: ${esc((item.opportunities[0] && item.opportunities[0].StageName) || "no open opportunity")}</div>
+              <div style="color:var(--muted);margin-bottom:4px">${esc(item.why_now)}</div>
+              ${item.suggested_outreach_draft ? `<div style="background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:8px;margin-top:4px">${esc(item.suggested_outreach_draft)}</div>` : ""}
+            </div>`).join("")}
+        </div>
+      </div>
+    ` : ""}
 
     ${OPS_STATE.error ? `<div class="panel"><div style="padding:14px 16px" class="claude-status err">${esc(OPS_STATE.error)}</div></div>` : ""}
 
@@ -2684,6 +2739,8 @@ function renderOpsConsole() {
   wrap.querySelectorAll("[data-followup]").forEach((btn) => btn.addEventListener("click", () => opsAsk(btn.dataset.question)));
   const traceToggle = wrap.querySelector("#ops-trace-toggle");
   if (traceToggle) traceToggle.addEventListener("click", opsToggleTrace);
+  const dailyDigestBtn = wrap.querySelector("#ops-daily-digest-btn");
+  if (dailyDigestBtn) dailyDigestBtn.addEventListener("click", opsRunDailyDigest);
   wrap.querySelectorAll("[data-approve]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(true)));
   wrap.querySelectorAll("[data-reject]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(false)));
 
