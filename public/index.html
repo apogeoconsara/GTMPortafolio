@@ -1064,19 +1064,33 @@ function renderAiModeBadge() {
 function render() {
   document.querySelectorAll(".rail nav button").forEach(b => b.classList.toggle("active", b.dataset.page === currentPage && !currentAccountId));
   const main = document.getElementById("main");
-  main.innerHTML = "";
-  renderAiModeBadge();
-  if (currentAccountId) { main.appendChild(renderAccountDetail(currentAccountId)); return; }
-  if (currentPage === "dashboard") main.appendChild(renderDashboard());
-  if (currentPage === "accounts") main.appendChild(renderAccounts());
-  if (currentPage === "signals") main.appendChild(renderSignals());
-  if (currentPage === "routing") main.appendChild(renderRouting());
-  if (currentPage === "outcomes") main.appendChild(renderOutcomes());
-  if (currentPage === "health") main.appendChild(renderSystemHealth());
-  if (currentPage === "roi") main.appendChild(renderCostRoi());
-  if (currentPage === "config") main.appendChild(renderConfig());
-  if (currentPage === "architecture") main.appendChild(renderArchitecture());
-  if (currentPage === "claude-agent") main.appendChild(renderOpsConsole());
+  // Building the new view can throw (bad data shape, unexpected field) —
+  // main.innerHTML is cleared below BEFORE the new content is ready, so an
+  // uncaught throw here would leave the page blank with no visible error.
+  // A silent blank screen after a real server response is exactly the kind
+  // of failure an "AI Ops" console must never produce, so every render is
+  // wrapped: on failure the user sees an explicit message, never nothing.
+  try {
+    main.innerHTML = "";
+    renderAiModeBadge();
+    if (currentAccountId) { main.appendChild(renderAccountDetail(currentAccountId)); return; }
+    if (currentPage === "dashboard") main.appendChild(renderDashboard());
+    if (currentPage === "accounts") main.appendChild(renderAccounts());
+    if (currentPage === "signals") main.appendChild(renderSignals());
+    if (currentPage === "routing") main.appendChild(renderRouting());
+    if (currentPage === "outcomes") main.appendChild(renderOutcomes());
+    if (currentPage === "health") main.appendChild(renderSystemHealth());
+    if (currentPage === "roi") main.appendChild(renderCostRoi());
+    if (currentPage === "config") main.appendChild(renderConfig());
+    if (currentPage === "architecture") main.appendChild(renderArchitecture());
+    if (currentPage === "claude-agent") main.appendChild(renderOpsConsole());
+  } catch (err) {
+    console.error("Render failed:", err);
+    main.innerHTML = `<div class="panel"><div style="padding:14px 16px" class="claude-status err">
+      Something went wrong displaying this page (${String(err && err.message || err).replace(/[<>&]/g, "")}).
+      Your last action may have completed on the server even though the screen didn't update — reload to check.
+    </div></div>`;
+  }
 }
 
 function goTo(page) { currentAccountId = null; currentPage = page; render(); window.scrollTo(0, 0); }

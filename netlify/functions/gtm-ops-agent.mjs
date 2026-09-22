@@ -42,11 +42,12 @@ Data honesty rules (critical):
 - If a tool result shows a signal is unavailable (e.g. "Engagement data unavailable", "No decision-maker identified"), say so explicitly in your reasoning instead of guessing or smoothing it over.
 - Never claim you sent anything, contacted anyone, or wrote to any CRM. You cannot — no such tool exists. Outreach text you write is always a DRAFT for a human to review and send themselves elsewhere.
 - The data source for every record is included in the tool results (e.g. "local_synthetic"). If it is not "salesforce", make clear this is demo/synthetic data, not live CRM data, if the user asks.
+- If the user asks you to send, mail, message, enroll, or otherwise dispatch anything right now (e.g. "send this to Diego", "mandaselo", "send it"), respond in plain text, explicitly and immediately: say you cannot send emails, messages, or sequences — no such tool exists in this system — and that the only thing you can do is prepare a draft (via propose_crm_action, Task/Note only) for a human to review and send themselves elsewhere. Do not call any tool in that turn.
 
 Workflow:
 1. When asked to prioritize, recommend, or rank accounts, call list_accounts_with_signals first.
 2. For each account you rank, base "why now" strictly on that account's own signals array (the evidence strings), not on other accounts' data.
-3. When you have enough information to answer a prioritization question, call submit_prioritization exactly once with your final ranking (top 3-5 accounts, most important first). Do not call it more than once per answer.
+3. When you have enough information to answer a prioritization question, call submit_prioritization exactly once with your final ranking, most important first. Include every account whose priority is High or Medium — never truncate to an arbitrary top N. Do not call it more than once per answer.
 4. Only call propose_crm_action when the user asks you to prepare, draft, or set up a follow-up action for a specific account. It only supports Task or Note — never propose an email, message, or any outbound communication, because no such tool exists for you to use. This tool NEVER executes anything by itself; it only produces a proposal for human review. Call it alone, in its own turn.
 5. If asked for more detail on one account, you may call get_account_evidence for it.
 
@@ -203,6 +204,29 @@ async function runLoop(messages, apiKey, userIntent) {
             suggested_outreach_draft: item.suggested_outreach_draft || "",
           });
         }
+        // Reproducibility: which accounts to SHOW must not depend on the model's
+        // discretion (it can vary run to run for the same input), only the
+        // deterministic priority computed in _crm_signals.mjs. Any High/Medium
+        // account the model left out of its own ranking is appended here with
+        // a generic, evidence-based note instead of silently disappearing.
+        const includedIds = new Set(enriched.map((e) => e.account.Id));
+        const allAccounts = await listAccountsWithSignals();
+        for (const bundle of allAccounts) {
+          if (includedIds.has(bundle.account.Id)) continue;
+          if (bundle.priority !== "High" && bundle.priority !== "Medium") continue;
+          enriched.push({
+            account: bundle.account,
+            contacts: bundle.contacts,
+            opportunities: bundle.opportunities,
+            tasks: bundle.tasks,
+            priority: bundle.priority,
+            signals: bundle.signals,
+            why_now: "Included by the deterministic priority engine (not separately reasoned about by the model this turn).",
+            recommended_action: "Review this account's signals below.",
+            suggested_outreach_draft: "",
+          });
+        }
+
         enriched.sort((a, b) => ({ High: 0, Medium: 1, Low: 2 }[a.priority] - { High: 0, Medium: 1, Low: 2 }[b.priority]));
 
         if (enriched.length === 0 && correctiveAttemptsLeft > 0) {
