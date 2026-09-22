@@ -51,7 +51,7 @@ Workflow:
 4. Only call propose_crm_action when the user asks you to prepare, draft, or set up a follow-up action for a specific account. It only supports Task or Note — never propose an email, message, or any outbound communication, because no such tool exists for you to use. This tool NEVER executes anything by itself; it only produces a proposal for human review. Call it alone, in its own turn.
 5. If asked for more detail on one account, you may call get_account_evidence for it.
 
-Keep prose short and concrete. No markdown formatting (no asterisks, no headers) — plain sentences.`;
+Keep prose short and concrete. No markdown formatting (no asterisks, no headers), plain sentences. Never use em dashes; use a period, comma, or parentheses instead.`;
 
 const TOOLS = [
   {

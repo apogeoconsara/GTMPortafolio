@@ -735,18 +735,18 @@ function jumpCloudPitchLine(whyJumpCloud) {
     return "JumpCloud unifies device and identity management into one platform instead of stitching together point tools.";
   }
   const reason = top.link.replace(/\.+\s*$/, "");
-  return `That's exactly what JumpCloud is built for — ${reason.charAt(0).toLowerCase() + reason.slice(1)}.`;
+  return `That's exactly what JumpCloud is built for: ${reason.charAt(0).toLowerCase() + reason.slice(1)}.`;
 }
 
 function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
   const primary = reasoning.primary_signal;
   const evidence = signals.find(s => s.signal_name === primary)?.evidence || "";
   if (reasoning.confidence === "low") {
-    return { subject_line: "(hold — insufficient signal)", opening_line: "—", message: "Not enough evidence to justify a personalized outreach angle for this account yet — recommend nurture over outbound.", call_to_action: "—", evidence_used: "none" };
+    return { subject_line: "(hold, insufficient signal)", opening_line: "(none)", message: "Not enough evidence to justify a personalized outreach angle for this account yet. Recommend nurture over outbound.", call_to_action: "(none)", evidence_used: "none" };
   }
   const p = primary.toLowerCase();
   const firstName = c.contact.name !== "unknown" ? c.contact.name.split(" ")[0] : null;
-  const greeting = firstName ? `Hi ${firstName} —` : "Hi —";
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
   const fact = stripEvidenceLabel(evidence);
 
   // Ground the opener in the literal cited fact where there is one — "saw
@@ -760,11 +760,11 @@ function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
     const role = extractQuotedRole(evidence);
     hook = role ? `saw you have a ${role} req open` : (fact ? `saw ${c.company_name} is hiring for ${fact}` : `saw ${c.company_name} is hiring for IT/security`);
   } else if (p.includes("remote") || p.includes("distributed")) {
-    hook = fact ? `noticed ${c.company_name}'s team is distributed — ${fact}` : `noticed ${c.company_name} runs a distributed team`;
+    hook = fact ? `noticed ${c.company_name}'s team is distributed: ${fact}` : `noticed ${c.company_name} runs a distributed team`;
   } else if (p.includes("expansion") || p.includes("countries") || p.includes("offices")) {
-    hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries — ${c.countries_of_operation.join(", ")}`;
+    hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries (${c.countries_of_operation.join(", ")})`;
   } else if (p.includes("growth")) {
-    hook = `saw ${c.company_name} is growing fast — ${c.estimated_growth}`;
+    hook = `saw ${c.company_name} is growing fast (${c.estimated_growth})`;
   } else {
     hook = `came across ${c.company_name}`;
   }
@@ -780,14 +780,14 @@ function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
   const titleLower = (persona.contact_title || "your team").toLowerCase();
   const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}.
 
-I'm reaching out from JumpCloud. We're the unified device and identity platform teams move to once managing access across a growing headcount stops being a single person's side project — it's the same shift ${c.company_name} looks to be heading toward.
+I'm reaching out from JumpCloud. We're the unified device and identity platform teams move to once managing access across a growing headcount stops being a single person's side project, which looks like the same shift ${c.company_name} is heading toward.
 
 ${pitch}
 
 For someone in your seat, that usually shows up as three concrete things: one system of record for who has access to what (instead of reconstructing it for every audit or SOC 2 review), faster and safer onboarding/offboarding as ${c.company_name} keeps growing, and fewer standing point-tools for your team to patch and babysit.
 
-I'm not asking you to rip anything out or sit through a deck — just a 20-minute conversation with one of our solutions engineers to see, concretely, whether this maps to how ${titleLower} is set up at ${c.company_name} today. If it doesn't, you'll know quickly and we part ways with no hard feelings.`;
-  const subject = `${c.company_name} + JumpCloud — closing the identity/device gap before it's an audit finding`;
+I'm not asking you to rip anything out or sit through a deck, just a 20-minute conversation with one of our solutions engineers to see, concretely, whether this maps to how ${titleLower} is set up at ${c.company_name} today. If it doesn't, you'll know quickly and we part ways with no hard feelings.`;
+  const subject = `${c.company_name} + JumpCloud: closing the identity/device gap before it's an audit finding`;
   const cta = "Any chance you have 20 minutes in the next couple weeks? Happy to work around your calendar.";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
