@@ -2385,6 +2385,7 @@ const OPS_STATE = {
   error: null,
   question: OPS_DEFAULT_QUESTION,
   messages: [],
+  turns: [],              // { role: "user"|"assistant", text, updatedRanking }[] — the visible chat log
   ranking: [],
   dataSource: null,
   pendingApproval: null,  // { tool_use_id, input: { accountId, actionType, ... } }
@@ -2401,6 +2402,8 @@ async function opsAsk(question) {
   OPS_STATE.status = "loading";
   OPS_STATE.error = null;
   OPS_STATE.hasAsked = true;
+  OPS_STATE.turns.push({ role: "user", text: q });
+  OPS_STATE.question = "";
   const messagesToSend = [...OPS_STATE.messages, { role: "user", content: q }];
   render();
 
@@ -2415,7 +2418,8 @@ async function opsAsk(question) {
 
     OPS_STATE.messages = data.messages;
     OPS_STATE.dataSource = data.data_source;
-    if (data.ranking && data.ranking.length > 0) {
+    const gotNewRanking = Boolean(data.ranking && data.ranking.length > 0);
+    if (gotNewRanking) {
       OPS_STATE.ranking = data.ranking;
     }
 
@@ -2423,12 +2427,18 @@ async function opsAsk(question) {
       OPS_STATE.pendingApproval = data.pending_approval;
       OPS_STATE.heldToolResults = data.held_tool_results || [];
       OPS_STATE.status = "idle";
+      OPS_STATE.turns.push({ role: "assistant", text: "I'd like to prepare a follow-up action — see the proposal below for approval." });
     } else {
       OPS_STATE.pendingApproval = null;
       OPS_STATE.heldToolResults = [];
       OPS_STATE.status = "idle";
       if (data.limit_reached) {
         OPS_STATE.error = "The agent hit this demo's step limit before finishing. Try asking again.";
+      } else {
+        const assistantText = gotNewRanking
+          ? "Updated the ranking below with " + data.ranking.length + " account" + (data.ranking.length === 1 ? "" : "s") + "."
+          : (data.note || "(No response text — try rephrasing your question.)");
+        OPS_STATE.turns.push({ role: "assistant", text: assistantText });
       }
     }
   } catch (err) {
@@ -2576,13 +2586,28 @@ function renderOpsConsole() {
 
     <div class="panel">
       <div style="padding:14px 16px;display:flex;gap:8px">
-        <input type="text" id="ops-question-input" value="${esc(OPS_STATE.question)}" ${busy ? "disabled" : ""}
+        <input type="text" id="ops-question-input" value="${esc(OPS_STATE.question)}"
+          placeholder="${OPS_STATE.hasAsked ? "Ask a follow-up — e.g. 'why not Acme?' or 'draft outreach for the #1 account'" : "Which accounts should I prioritize this week?"}"
+          ${busy ? "disabled" : ""}
           style="flex:1;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:10px 12px;font-family:var(--font-body);font-size:13.5px">
         <button class="btn primary" id="ops-ask-btn" ${busy ? "disabled" : ""}>${busy ? "Analyzing..." : "Ask"}</button>
       </div>
     </div>
 
     ${OPS_STATE.error ? `<div class="panel"><div style="padding:14px 16px" class="claude-status err">${esc(OPS_STATE.error)}</div></div>` : ""}
+
+    ${OPS_STATE.turns.length > 0 ? `
+      <div class="panel" style="margin-bottom:16px">
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;max-height:320px;overflow-y:auto">
+          ${OPS_STATE.turns.map((t) => `
+            <div style="align-self:${t.role === "user" ? "flex-end" : "flex-start"};max-width:80%">
+              <div style="font-size:10.5px;color:var(--muted);margin-bottom:2px;text-align:${t.role === "user" ? "right" : "left"}">${t.role === "user" ? "You" : "Agent"}</div>
+              <div style="background:${t.role === "user" ? "var(--accent)" : "var(--panel-2)"};color:${t.role === "user" ? "#fff" : "var(--text)"};border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:13.5px;white-space:pre-wrap">${esc(t.text)}</div>
+            </div>`).join("")}
+          ${busy ? `<div style="align-self:flex-start;font-size:12.5px;color:var(--muted)">Analyzing...</div>` : ""}
+        </div>
+      </div>
+    ` : ""}
 
     ${!OPS_STATE.hasAsked && OPS_STATE.ranking.length === 0 ? `
       <div class="panel"><p style="padding:14px 16px;margin:0;color:var(--muted);font-size:13px">Ask the question above to see a ranked, evidence-backed list of accounts.</p></div>
