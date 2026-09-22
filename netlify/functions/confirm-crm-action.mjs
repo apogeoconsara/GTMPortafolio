@@ -4,10 +4,11 @@
 // Defaults to dry-run. Set ALLOW_SALESFORCE_WRITES=true as a Netlify
 // environment variable to change that — but even then, this only allows
 // Task/Note (never email, messaging, deletion, stage changes, or consent
-// changes), and today it still can't actually execute anything because no
-// real Salesforce connector is implemented in _crm_connector.mjs yet. That
-// last check is deliberate: flipping the flag should never silently start
-// pretending to write to a CRM that isn't actually connected.
+// changes). _crm_connector.mjs now has a real, working Salesforce READ
+// connector (see _crm_salesforce.mjs), but WRITES are a deliberately
+// separate, not-yet-implemented step: flipping ALLOW_SALESFORCE_WRITES
+// should never silently start creating real records without an explicit,
+// additional decision to wire that up here.
 const ALLOW_WRITES = process.env.ALLOW_SALESFORCE_WRITES === "true";
 const LOW_RISK_ACTIONS = new Set(["Task", "Note"]);
 
@@ -39,12 +40,14 @@ export default async (req) => {
     }), { headers: { "content-type": "application/json" } });
   }
 
-  // ALLOW_SALESFORCE_WRITES=true, but there is still no real Salesforce
-  // connector implemented (see _crm_connector.mjs) — refuse rather than
-  // pretend to have written something.
+  // ALLOW_SALESFORCE_WRITES=true, but the write path itself (creating a
+  // real Task/Note record in Salesforce) is still deliberately not
+  // implemented here — refuse rather than pretend to have written
+  // something. Reads are real (see _crm_salesforce.mjs); writes are a
+  // separate, not-yet-made decision.
   return new Response(JSON.stringify({
     executed: false,
     status: "NOT_EXECUTED",
-    message: "ALLOW_SALESFORCE_WRITES is enabled, but no real Salesforce connector is configured yet (see _crm_connector.mjs). Nothing was written.",
+    message: "ALLOW_SALESFORCE_WRITES is enabled, but the write path is not implemented yet in confirm-crm-action.mjs. Nothing was written.",
   }), { headers: { "content-type": "application/json" } });
 };

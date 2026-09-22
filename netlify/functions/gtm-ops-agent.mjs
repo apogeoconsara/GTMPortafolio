@@ -5,11 +5,13 @@
 // answers "which accounts should I prioritize this week" against CRM-shaped
 // data (Accounts/Contacts/Opportunities/Tasks) via _crm_connector.mjs.
 //
-// Salesforce is the intended system of record. Today _crm_connector.mjs
-// serves LOCAL SYNTHETIC data (clearly labeled dataSource: "local_synthetic"
-// on every record) because no Salesforce MCP connector or credentials are
-// configured in this project — see _crm_connector.mjs for exactly where a
-// real connector plugs in. Nothing here pretends otherwise.
+// Salesforce is the system of record. _crm_connector.mjs serves real
+// Salesforce data (dataSource: "salesforce") via Client Credentials Flow
+// when SALESFORCE_INSTANCE_URL / SALESFORCE_CLIENT_ID / SALESFORCE_CLIENT_SECRET
+// are set on this site, and otherwise falls back to LOCAL SYNTHETIC data
+// (clearly labeled dataSource: "local_synthetic" on every record) — see
+// _crm_connector.mjs / _crm_salesforce.mjs / _crm_data.mjs. Nothing here
+// pretends one is the other.
 //
 // CRITICAL SAFETY DESIGN:
 // - There is NO tool in this file that sends an email, a message, a Slack
@@ -22,9 +24,10 @@
 //   ALLOW_SALESFORCE_WRITES, and today impossible anyway with no real
 //   Salesforce connector) only happens, if ever, in confirm-crm-action.mjs,
 //   after an explicit human click.
-// - Every account's priority score comes from _crm_data.mjs's deterministic
-//   signal counting, never from the model's own claim, so the UI's badge can
-//   never contradict the evidence shown for it.
+// - Every account's priority score comes from _crm_signals.mjs's deterministic
+//   signal counting (shared by both real Salesforce and synthetic data),
+//   never from the model's own claim, so the UI's badge can never contradict
+//   the evidence shown for it.
 
 import { listAccountsWithSignals, getAccountEvidence, DATA_SOURCE } from "./_crm_connector.mjs";
 
