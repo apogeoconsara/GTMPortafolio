@@ -713,7 +713,22 @@ function extractQuotedRole(evidenceText) {
   return m ? m[1] : null;
 }
 
-function generateOutreach(c, signals, reasoning, persona) {
+// Turns one buildWhyJumpCloud() reason (written for the account-detail page,
+// e.g. "Unified device management across Mac/Windows/Linux instead of
+// per-OS tooling.") into a first-person sentence naming JumpCloud, so the
+// outreach message actually answers the question a prospect always has:
+// why THIS vendor, not just "why now". Falls back to a generic mention if
+// no reason cleared (score too weak to draw a credible connection).
+function jumpCloudPitchLine(whyJumpCloud) {
+  const top = whyJumpCloud && whyJumpCloud[0];
+  if (!top || /no strong fit signal/i.test(top.attr)) {
+    return "JumpCloud unifies device and identity management into one platform instead of stitching together point tools.";
+  }
+  const reason = top.link.replace(/\.+\s*$/, "");
+  return `That's exactly what JumpCloud is built for — ${reason.charAt(0).toLowerCase() + reason.slice(1)}.`;
+}
+
+function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
   const primary = reasoning.primary_signal;
   const evidence = signals.find(s => s.signal_name === primary)?.evidence || "";
   if (reasoning.confidence === "low") {
@@ -730,28 +745,27 @@ function generateOutreach(c, signals, reasoning, persona) {
   // robotic in a first-touch message: naming HOW the fact was found ("saw
   // this at X:", a colon before a quote), and burying the ask three
   // sentences deep.
-  let hook, painLine;
+  let hook;
   if (p.includes("hiring")) {
     const role = extractQuotedRole(evidence);
     hook = role ? `saw you have a ${role} req open` : (fact ? `saw ${c.company_name} is hiring for ${fact}` : `saw ${c.company_name} is hiring for IT/security`);
-    painLine = `Teams usually don't have identity and device access fully owned by the time that role gets filled — often a mix of spreadsheets and whatever each tool bolted on.`;
   } else if (p.includes("remote") || p.includes("distributed")) {
     hook = fact ? `noticed ${c.company_name}'s team is distributed — ${fact}` : `noticed ${c.company_name} runs a distributed team`;
-    painLine = `Distributed teams usually end up managing device and access security across a pile of disconnected tools before anyone officially owns it.`;
   } else if (p.includes("expansion") || p.includes("countries") || p.includes("offices")) {
     hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries — ${c.countries_of_operation.join(", ")}`;
-    painLine = `Every new country usually means another local login quirk or compliance wrinkle nobody's centrally tracking yet.`;
   } else if (p.includes("growth")) {
     hook = `saw ${c.company_name} is growing fast — ${c.estimated_growth}`;
-    painLine = `Headcount that fast usually outpaces whoever owns device and access provisioning, until it becomes an audit finding.`;
   } else {
     hook = `came across ${c.company_name}`;
-    painLine = `Curious how you're currently handling device and access management as the team grows.`;
   }
 
-  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. ${painLine} Is that already owned at ${c.company_name}, or still nobody's job?`;
-  const subject = `${c.company_name} + identity/device access`;
-  const cta = "Worth 15 minutes to compare notes — no deck, just a conversation?";
+  // The part a lot of AI-written outreach skips: actually saying who you
+  // are and why THIS vendor solves the pain just named, not just "curious
+  // how you're handling this" and leaving the prospect to guess.
+  const pitch = jumpCloudPitchLine(whyJumpCloud);
+  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. I'm reaching out from JumpCloud — we handle device and identity management for companies scaling the way ${c.company_name} is. ${pitch} Worth 15 minutes to see if it'd fit how ${c.company_name} handles this today?`;
+  const subject = `${c.company_name} + JumpCloud — device/identity for scaling teams`;
+  const cta = "No deck, just a conversation — happy to work around your calendar.";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
 
@@ -940,11 +954,11 @@ function buildAccountRecord(c) {
   const score = scoreAccount(c, signals);
   const persona = identifyPersona(c, signals);
   const reasoning = generateAIReasoning(c, signals, score);
-  const outreach = generateOutreach(c, signals, reasoning, persona);
+  const whyJumpCloud = buildWhyJumpCloud(c, signals);
+  const outreach = generateOutreach(c, signals, reasoning, persona, whyJumpCloud);
   const qa = qaCheckOutreach(signals, outreach, reasoning);
   const routing = routeAccount(c, signals, score);
   const sequence = buildSequence(c, signals, reasoning, persona);
-  const whyJumpCloud = buildWhyJumpCloud(c, signals);
   const agentRun = buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing);
   return {
     raw_input: { company_name: c.company_name, website: c.website },
