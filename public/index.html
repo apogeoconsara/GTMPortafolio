@@ -786,9 +786,9 @@ ${pitch}
 
 For someone in your seat, that usually shows up as three concrete things: one system of record for who has access to what (instead of reconstructing it for every audit or SOC 2 review), faster and safer onboarding/offboarding as ${c.company_name} keeps growing, and fewer standing point-tools for your team to patch and babysit.
 
-I'm not asking you to rip anything out or sit through a deck, just a 20-minute conversation with one of our solutions engineers to see, concretely, whether this maps to how ${titleLower} is set up at ${c.company_name} today. If it doesn't, you'll know quickly and we part ways with no hard feelings.`;
+This isn't a decision to make from an email thread. If there's a real fit, a 20-minute call with one of our solutions engineers would show concretely where JumpCloud would plug into how ${titleLower} is set up at ${c.company_name} today.`;
   const subject = `${c.company_name} + JumpCloud: closing the identity/device gap before it's an audit finding`;
-  const cta = "Any chance you have 20 minutes in the next couple weeks? Happy to work around your calendar.";
+  const cta = "Do you have 20 minutes in the next two weeks?";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
 
@@ -1202,7 +1202,7 @@ function renderDashboard() {
       <strong>Tier A + B combined</strong> (${trueQualRate}%) — a looser definition: decent score, even without a verified contact yet.
     </div>
     <div class="panel">
-      <div class="panel-head"><h2>Notifications</h2><span class="hint">generated from this book's real signals/routing — not simulated placeholders</span></div>
+      <div class="panel-head"><h2>Notifications</h2></div>
       <div class="body-pad" style="display:flex;flex-direction:column;gap:8px">
         ${ACCOUNTS
           .filter(a => a.routing.action === "Route to BDR" || (a.score.tier !== "C" && a.signals.some(s => s.detected)))
@@ -1393,9 +1393,8 @@ function renderAccountDetail(id) {
             <div style="font-size:13px"><strong>To:</strong> ${esc(a.persona.contact_name)}, ${esc(a.persona.contact_title)} &lt;${esc(a.persona.contact_email)}&gt;</div>
             <a class="btn small primary" target="_blank" rel="noopener" href="https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(a.persona.contact_email)}&su=${encodeURIComponent(outreach.subject_line)}&body=${encodeURIComponent(outreach.message + "\n\n" + outreach.call_to_action)}">Open draft in Gmail ↗</a>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Opens a real Gmail compose window, pre-filled — nothing sends until the seller clicks Send themselves.</div>
         ` : `
-          <div style="margin-bottom:10px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--muted)">No verified email for a decision-maker at this account yet — this draft has no send target. Route to contact enrichment before outreach.</div>
+          <div style="margin-bottom:10px;padding:8px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--muted)">No verified email for a decision-maker at this account yet.</div>
         `}
         <div class="outreach-card">
           <div class="subj">${esc(outreach.subject_line)}</div>
@@ -2765,7 +2764,6 @@ function renderOpsConsole() {
     ${OPS_STATE.traceOpen && OPS_STATE.trace.length > 0 ? `
       <div class="panel" style="margin-bottom:16px">
         <div style="padding:14px 16px">
-          <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Every tool call the agent has made this session, in order — this is the autonomous reasoning loop, not a scripted sequence.</div>
           <ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">
             ${OPS_STATE.trace.map((t) => `<li><span class="tag" style="margin-right:6px">${esc(t.tool)}</span>${esc(t.detail)}</li>`).join("")}
           </ol>
@@ -2783,7 +2781,6 @@ function renderOpsConsole() {
       </div>
       <div style="padding:0 16px 14px 16px">
         <button class="btn small" id="ops-daily-digest-btn" ${busy ? "disabled" : ""}>Run Daily Digest (simulated)</button>
-        <span style="font-size:11px;color:var(--muted);margin-left:8px">Simulates the scheduled morning run described in Architecture — real reasoning, simulated Gmail delivery</span>
       </div>
     </div>
 
@@ -2791,9 +2788,6 @@ function renderOpsConsole() {
       <div class="panel" style="margin-bottom:16px;border-color:var(--accent)">
         <div class="panel-head"><h2>📧 Daily Digest — simulated Gmail draft</h2></div>
         <div style="padding:14px 16px">
-          <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">
-            SIMULATED — this demo has no real Gmail connection. In production this is a scheduled job (see Architecture) that runs this same reasoning every morning and creates a real Gmail draft per account, never sends automatically.
-          </div>
           <div style="font-size:13px;font-weight:600;margin-bottom:8px">Subject: Your ${OPS_STATE.ranking.length} accounts to work today</div>
           ${OPS_STATE.ranking.map((item, i) => `
             <div style="border-top:1px solid var(--line);padding:10px 0;font-size:13px">
