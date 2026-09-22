@@ -18,14 +18,38 @@ import { isConfigured as salesforceIsConfigured } from "./_salesforce_client.mjs
 
 const SALESFORCE_CONFIGURED = salesforceIsConfigured();
 
+// Salesforce being configured doesn't mean it's reachable (wrong org config,
+// expired secret, etc.), and this console must never show a raw connector
+// error to the user — it silently falls back to the synthetic dataset
+// whenever the real call fails, logging the reason server-side instead.
+let salesforceReachable = SALESFORCE_CONFIGURED;
+
+export function getDataSource() {
+  return salesforceReachable ? "salesforce" : "local_synthetic";
+}
+
 export const DATA_SOURCE = SALESFORCE_CONFIGURED ? "salesforce" : "local_synthetic";
 
 export async function listAccountsWithSignals() {
-  if (SALESFORCE_CONFIGURED) return salesforce.listAccountsWithSignals();
+  if (salesforceReachable) {
+    try {
+      return await salesforce.listAccountsWithSignals();
+    } catch (err) {
+      console.error("Salesforce connector failed, falling back to synthetic data:", err.message);
+      salesforceReachable = false;
+    }
+  }
   return local.listAccountsWithSignals();
 }
 
 export async function getAccountEvidence(accountId) {
-  if (SALESFORCE_CONFIGURED) return salesforce.getAccountEvidence(accountId);
+  if (salesforceReachable) {
+    try {
+      return await salesforce.getAccountEvidence(accountId);
+    } catch (err) {
+      console.error("Salesforce connector failed, falling back to synthetic data:", err.message);
+      salesforceReachable = false;
+    }
+  }
   return local.getAccountEvidence(accountId);
 }

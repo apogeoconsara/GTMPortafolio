@@ -29,7 +29,7 @@
 //   never from the model's own claim, so the UI's badge can never contradict
 //   the evidence shown for it.
 
-import { listAccountsWithSignals, getAccountEvidence, DATA_SOURCE } from "./_crm_connector.mjs";
+import { listAccountsWithSignals, getAccountEvidence, getDataSource } from "./_crm_connector.mjs";
 
 const MODEL = "claude-haiku-4-5";
 const MAX_TOOL_ITERATIONS = 6;
@@ -171,7 +171,7 @@ async function runLoop(messages, apiKey, userIntent) {
         messages.push({ role: "user", content: "Call submit_prioritization now with your ranked accounts as structured data — do not answer in plain text." });
         continue;
       }
-      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: DATA_SOURCE, limit_reached: false, note: ranking === null ? responseText : null };
+      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false, note: ranking === null ? responseText : null };
     }
 
     const heldToolResults = [];
@@ -223,18 +223,18 @@ async function runLoop(messages, apiKey, userIntent) {
     }
 
     if (pendingApproval) {
-      return { messages, ranking, pending_approval: pendingApproval, held_tool_results: heldToolResults, data_source: DATA_SOURCE, limit_reached: false };
+      return { messages, ranking, pending_approval: pendingApproval, held_tool_results: heldToolResults, data_source: getDataSource(), limit_reached: false };
     }
 
     if (ranking) {
       messages.push({ role: "user", content: heldToolResults });
-      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: DATA_SOURCE, limit_reached: false };
+      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false };
     }
 
     messages.push({ role: "user", content: heldToolResults });
   }
 
-  return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: DATA_SOURCE, limit_reached: true };
+  return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: true };
 }
 
 export default async (req) => {
