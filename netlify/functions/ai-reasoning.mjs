@@ -34,15 +34,15 @@ const SYSTEM_PROMPT = `You are a B2B GTM research assistant and outbound copywri
   "confidence": "high" | "medium" | "low",
   "missing_information": string[],
   "outreach": {
-    "subject_line": string (short, specific, no clickbait),
+    "subject_line": string (short, specific, no clickbait — may reference the business stakes, e.g. an audit/compliance angle, not just the company name),
     "opening_line": string (one sentence, references the actual cited evidence, not a category paraphrase),
-    "message": string (60-90 words total including the opening line, warm and conversational like a person who actually read about this company wrote it — not a template with blanks filled in; no generic filler like "teams like yours" or "in today's fast-paced world"; grounded only in the evidence provided, never inventing a detail),
-    "call_to_action": string (one low-friction ask, not "let's hop on a call to discuss synergies"),
+    "message": string (150-220 words, several short paragraphs separated by "\n\n" — NOT one dense block. The recipient is a VP or senior IT/security leader, not an individual contributor: a one-liner reads as spray-and-pray and gets ignored, so write like someone who actually thought about their role and what they're accountable for. Structure: (1) the specific evidence-grounded observation, (2) one sentence naming JumpCloud and what it does, (3) 2-3 concrete outcomes framed for THIS person's seat — audit/compliance exposure, onboarding/offboarding risk as headcount grows, reducing the number of point-tools their team has to maintain — never generic filler like "teams like yours" or "in today's fast-paced world", (4) an explicit acknowledgment this isn't a snap decision and you're not asking them to rip anything out today. Grounded only in the evidence provided, never inventing a company detail, a customer name, or a stat not given to you),
+    "call_to_action": string (one specific, low-friction ask with a real time box, e.g. "20 minutes in the next couple weeks" — not "let's hop on a call to discuss synergies", not vague "let me know if interested"),
     "evidence_used": string (must be copied EXACTLY, character-for-character, from one of the detected_signals' "evidence" fields provided below — this is checked programmatically)
   }
 }
 If confidence is "low" (little or no real signal), set outreach.subject_line to "(hold — insufficient signal)" and outreach.message to a one-sentence note that this account should go to nurture, not outbound — do not force a personalized pitch out of weak evidence.
-If contact_first_name is provided, open the message with it ("Hi {name},"); if it is null, open with a name-free greeting ("Hi,") — never invent or guess a name.
+If contact_first_name is provided, open the message with it ("Hi {name} —"); if it is null, open with a name-free greeting ("Hi —") — never invent or guess a name.
 Never invent facts not present in the input. You do not set the ICP score or tier — those are provided to you as already-decided context, not something to re-evaluate.`;
 
 export default async (req) => {
@@ -83,7 +83,7 @@ export default async (req) => {
     headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 750,
+      max_tokens: 950,
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: SYSTEM_PROMPT },

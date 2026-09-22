@@ -709,8 +709,18 @@ function stripEvidenceLabel(evidenceText) {
 // prospect — everything else in these strings is internal sourcing
 // narrative, not customer-facing copy.
 function extractQuotedRole(evidenceText) {
-  const m = /"([^"]{2,60})"/.exec(evidenceText || "");
-  return m ? m[1] : null;
+  // Some evidence strings nest quotes two levels deep — a citation label
+  // wraps the whole underlying fact in quotes, and that fact itself quotes
+  // a role title again: Label: "Open req found via Clay for "Product
+  // Security Engineer" (Sep 2026)". A naive first-quoted-pair match grabs
+  // "Open req found via Clay for " (the wrong, outer pair). A role title is
+  // reliably Title Case (every word capitalized); a narrative fragment like
+  // "Open req found via Clay for" is not ("req", "found", "via" aren't), so
+  // requiring every word capitalized picks the real title regardless of
+  // which quote pair it's nested inside.
+  const matches = (evidenceText || "").match(/"([A-Z][a-zA-Z]*(?:\s[A-Z][a-zA-Z]*){0,4})"/g) || [];
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1].replace(/"/g, "");
 }
 
 // Turns one buildWhyJumpCloud() reason (written for the account-detail page,
@@ -759,13 +769,26 @@ function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
     hook = `came across ${c.company_name}`;
   }
 
-  // The part a lot of AI-written outreach skips: actually saying who you
-  // are and why THIS vendor solves the pain just named, not just "curious
-  // how you're handling this" and leaving the prospect to guess.
+  // A VP doesn't move on "curious how you're handling this" — they move on
+  // a specific business reason wired to their actual scope (audit exposure,
+  // headcount they're accountable for, tool sprawl they inherited), stated
+  // plainly, with a low-friction next step that doesn't presume the sale.
+  // Length is deliberate: a one-liner reads as spray-and-pray; this reads as
+  // someone who looked at the account and thought about their role
+  // specifically, which is what actually earns a reply from a VP.
   const pitch = jumpCloudPitchLine(whyJumpCloud);
-  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}. I'm reaching out from JumpCloud — we handle device and identity management for companies scaling the way ${c.company_name} is. ${pitch} Worth 15 minutes to see if it'd fit how ${c.company_name} handles this today?`;
-  const subject = `${c.company_name} + JumpCloud — device/identity for scaling teams`;
-  const cta = "No deck, just a conversation — happy to work around your calendar.";
+  const titleLower = (persona.contact_title || "your team").toLowerCase();
+  const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}.
+
+I'm reaching out from JumpCloud. We're the unified device and identity platform teams move to once managing access across a growing headcount stops being a single person's side project — it's the same shift ${c.company_name} looks to be heading toward.
+
+${pitch}
+
+For someone in your seat, that usually shows up as three concrete things: one system of record for who has access to what (instead of reconstructing it for every audit or SOC 2 review), faster and safer onboarding/offboarding as ${c.company_name} keeps growing, and fewer standing point-tools for your team to patch and babysit.
+
+I'm not asking you to rip anything out or sit through a deck — just a 20-minute conversation with one of our solutions engineers to see, concretely, whether this maps to how ${titleLower} is set up at ${c.company_name} today. If it doesn't, you'll know quickly and we part ways with no hard feelings.`;
+  const subject = `${c.company_name} + JumpCloud — closing the identity/device gap before it's an audit finding`;
+  const cta = "Any chance you have 20 minutes in the next couple weeks? Happy to work around your calendar.";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
 
@@ -1376,7 +1399,7 @@ function renderAccountDetail(id) {
         `}
         <div class="outreach-card">
           <div class="subj">${esc(outreach.subject_line)}</div>
-          <div>${esc(outreach.message)}</div>
+          <div style="white-space:pre-wrap">${esc(outreach.message)}</div>
           <div style="margin-top:10px;color:var(--muted);font-size:12.5px">${esc(outreach.call_to_action)}</div>
         </div>
         <div style="margin-top:10px;font-size:12.5px;${qa.passed ? 'color:var(--good)' : 'color:var(--bad)'}">${qa.passed ? '✓ QA passed' : '✗ QA failed'} — ${esc(qa.note)}</div>
