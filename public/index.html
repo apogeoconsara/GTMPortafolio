@@ -2401,22 +2401,31 @@ const OPS_STATE = {
   messages: [],
   turns: [],              // { role: "user"|"assistant", text, updatedRanking }[] — the visible chat log
   ranking: [],
+  trace: [],              // { step, tool, detail }[] from the agent's own reasoning loop (which tool it picked, and why)
+  traceOpen: false,
   dataSource: null,
   pendingApproval: null,  // { tool_use_id, input: { accountId, actionType, ... } }
   heldToolResults: [],
   proposals: {},          // accountId -> { input, result } once resolved (approved or rejected)
   evidenceOpen: {},        // accountId -> bool
   hasAsked: false,
+  autoChainedFor: null,    // accountId already auto-chained into a proposed action, so it only fires once
 };
 
-async function opsAsk(question) {
+function opsToggleTrace() {
+  OPS_STATE.traceOpen = !OPS_STATE.traceOpen;
+  render();
+}
+
+async function opsAsk(question, opts) {
   const q = (question || "").trim();
   if (!q || OPS_STATE.status === "loading" || OPS_STATE.pendingApproval) return;
+  const autonomous = Boolean(opts && opts.autonomous);
 
   OPS_STATE.status = "loading";
   OPS_STATE.error = null;
   OPS_STATE.hasAsked = true;
-  OPS_STATE.turns.push({ role: "user", text: q });
+  if (!autonomous) OPS_STATE.turns.push({ role: "user", text: q });
   OPS_STATE.question = "";
   const messagesToSend = [...OPS_STATE.messages, { role: "user", content: q }];
   render();
@@ -2432,6 +2441,7 @@ async function opsAsk(question) {
 
     OPS_STATE.messages = data.messages;
     OPS_STATE.dataSource = data.data_source;
+    OPS_STATE.trace = OPS_STATE.trace.concat(data.trace || []);
     const gotNewRanking = Boolean(data.ranking && data.ranking.length > 0);
     if (gotNewRanking) {
       OPS_STATE.ranking = data.ranking;
@@ -2441,7 +2451,10 @@ async function opsAsk(question) {
       OPS_STATE.pendingApproval = data.pending_approval;
       OPS_STATE.heldToolResults = data.held_tool_results || [];
       OPS_STATE.status = "idle";
-      OPS_STATE.turns.push({ role: "assistant", text: "I'd like to prepare a follow-up action — see the proposal below for approval." });
+      OPS_STATE.turns.push({
+        role: "assistant",
+        text: (autonomous ? "Autonomously " : "") + "Prepared a follow-up action proposal — see below for approval before anything is written to the CRM.",
+      });
     } else {
       OPS_STATE.pendingApproval = null;
       OPS_STATE.heldToolResults = [];
@@ -2450,9 +2463,24 @@ async function opsAsk(question) {
         OPS_STATE.error = "The agent hit this demo's step limit before finishing. Try asking again.";
       } else {
         const assistantText = gotNewRanking
-          ? "Updated the ranking below with " + data.ranking.length + " account" + (data.ranking.length === 1 ? "" : "s") + "."
+          ? "Ranked " + data.ranking.length + " account" + (data.ranking.length === 1 ? "" : "s") + " below, evidence-backed. Now autonomously preparing a next-best-action for the top one..."
           : (data.note || "(No response text — try rephrasing your question.)");
         OPS_STATE.turns.push({ role: "assistant", text: assistantText });
+      }
+    }
+
+    // Autonomous chaining: once a fresh ranking comes back, the agent
+    // immediately reasons about the #1 account's next step on its own —
+    // no extra click, no extra typed question — and stops only at the
+    // human-approval gate above. This only ever fires once per top account
+    // so it can't loop on itself.
+    if (gotNewRanking && !data.pending_approval && data.ranking[0]) {
+      const topId = data.ranking[0].account.Id;
+      if (OPS_STATE.autoChainedFor !== topId) {
+        OPS_STATE.autoChainedFor = topId;
+        render();
+        await opsAsk(`Prepare a follow-up action for account ${topId} — you decide Task or Note and the content, based on its evidence.`, { autonomous: true });
+        return;
       }
     }
   } catch (err) {
@@ -2594,10 +2622,22 @@ function renderOpsConsole() {
       <p>Salesforce is the system of record; this console is an intelligence and orchestration layer on top of it — it never replaces your CRM.</p>
     </div>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
       <span class="rail-badge" style="background:rgba(220,38,38,.12);color:var(--bad);display:inline-flex">DEMO MODE — READ ONLY</span>
       <span class="tag">Data source: ${OPS_STATE.dataSource === "salesforce" ? "Salesforce" : "Local synthetic dataset (not Salesforce)"}</span>
+      ${OPS_STATE.trace.length > 0 ? `<button class="btn small" id="ops-trace-toggle">${OPS_STATE.traceOpen ? "Hide" : "View"} agent trace (${OPS_STATE.trace.length} step${OPS_STATE.trace.length === 1 ? "" : "s"})</button>` : ""}
     </div>
+
+    ${OPS_STATE.traceOpen && OPS_STATE.trace.length > 0 ? `
+      <div class="panel" style="margin-bottom:16px">
+        <div style="padding:14px 16px">
+          <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Every tool call the agent has made this session, in order — this is the autonomous reasoning loop, not a scripted sequence.</div>
+          <ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">
+            ${OPS_STATE.trace.map((t) => `<li><span class="tag" style="margin-right:6px">${esc(t.tool)}</span>${esc(t.detail)}</li>`).join("")}
+          </ol>
+        </div>
+      </div>
+    ` : ""}
 
     <div class="panel">
       <div style="padding:14px 16px;display:flex;gap:8px">
@@ -2642,6 +2682,8 @@ function renderOpsConsole() {
   wrap.querySelectorAll("[data-evidence]").forEach((btn) => btn.addEventListener("click", () => opsToggleEvidence(btn.dataset.evidence)));
   wrap.querySelectorAll("[data-prepare]").forEach((btn) => btn.addEventListener("click", () => opsPrepareAction(btn.dataset.prepare)));
   wrap.querySelectorAll("[data-followup]").forEach((btn) => btn.addEventListener("click", () => opsAsk(btn.dataset.question)));
+  const traceToggle = wrap.querySelector("#ops-trace-toggle");
+  if (traceToggle) traceToggle.addEventListener("click", opsToggleTrace);
   wrap.querySelectorAll("[data-approve]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(true)));
   wrap.querySelectorAll("[data-reject]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(false)));
 

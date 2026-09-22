@@ -153,9 +153,21 @@ function wantsPrioritization(text) {
   return /priorit|rank|which account/i.test(text || "");
 }
 
+// Human-readable one-liner for each tool the agent can pick, shown in the
+// visible reasoning trace so a viewer can see WHICH tool it chose and why,
+// not just the final answer — the "autonomous agent" behavior a portfolio
+// reviewer wants to see is the tool-choice loop itself, not just its output.
+const TOOL_TRACE_LABEL = {
+  list_accounts_with_signals: (input) => "Retrieving all accounts with computed signals from the CRM connector.",
+  get_account_evidence: (input) => `Pulling the full evidence bundle for account "${input && input.accountId}".`,
+  submit_prioritization: (input) => `Submitting a ranked priority list (${(input && input.ranking && input.ranking.length) || 0} accounts reasoned about directly).`,
+  propose_crm_action: (input) => `Proposing a ${input && input.actionType} for "${input && input.accountId}" — held for human approval, not executed.`,
+};
+
 async function runLoop(messages, apiKey, userIntent) {
   let ranking = null;
   let correctiveAttemptsLeft = 1;
+  const trace = [];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const nearEnd = i >= MAX_TOOL_ITERATIONS - 2;
@@ -172,7 +184,12 @@ async function runLoop(messages, apiKey, userIntent) {
         messages.push({ role: "user", content: "Call submit_prioritization now with your ranked accounts as structured data — do not answer in plain text." });
         continue;
       }
-      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false, note: ranking === null ? responseText : null };
+      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false, note: ranking === null ? responseText : null, trace };
+    }
+
+    for (const block of toolUseBlocks) {
+      const label = TOOL_TRACE_LABEL[block.name];
+      trace.push({ step: trace.length + 1, tool: block.name, detail: label ? label(block.input) : `Called ${block.name}.` });
     }
 
     const heldToolResults = [];
@@ -247,18 +264,18 @@ async function runLoop(messages, apiKey, userIntent) {
     }
 
     if (pendingApproval) {
-      return { messages, ranking, pending_approval: pendingApproval, held_tool_results: heldToolResults, data_source: getDataSource(), limit_reached: false };
+      return { messages, ranking, pending_approval: pendingApproval, held_tool_results: heldToolResults, data_source: getDataSource(), limit_reached: false, trace };
     }
 
     if (ranking) {
       messages.push({ role: "user", content: heldToolResults });
-      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false };
+      return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: false, trace };
     }
 
     messages.push({ role: "user", content: heldToolResults });
   }
 
-  return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: true };
+  return { messages, ranking, pending_approval: null, held_tool_results: [], data_source: getDataSource(), limit_reached: true, trace };
 }
 
 export default async (req) => {
