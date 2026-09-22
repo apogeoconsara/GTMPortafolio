@@ -1134,6 +1134,29 @@ function renderDashboard() {
       <strong>Tier A + B combined</strong> (${trueQualRate}%) — a looser definition: decent score, even without a verified contact yet.
     </div>
     <div class="panel">
+      <div class="panel-head"><h2>Notifications</h2><span class="hint">generated from this book's real signals/routing — not simulated placeholders</span></div>
+      <div class="body-pad" style="display:flex;flex-direction:column;gap:8px">
+        ${ACCOUNTS
+          .filter(a => a.routing.action === "Route to BDR" || (a.score.tier !== "C" && a.signals.some(s => s.detected)))
+          .sort((a, b) => b.score.total_score - a.score.total_score)
+          .map(a => {
+            const ready = a.routing.action === "Route to BDR";
+            return `
+              <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:10px 12px">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                  <span style="flex-shrink:0">${ready ? "🟢" : "🟡"}</span>
+                  <div style="min-width:0">
+                    <div style="font-size:13px;font-weight:600">${ready ? "Outreach draft ready" : "New signal detected"} — ${esc(a.enriched.company_name)}</div>
+                    <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ready ? esc(a.outreach.subject_line) : "Added to nurture — re-evaluate on next signal change."}</div>
+                  </div>
+                </div>
+                <button class="btn small" data-goto-account="${esc(findId(a))}" style="flex-shrink:0">${ready ? "Review draft" : "View account"}</button>
+              </div>`;
+          }).join("") || `<p style="margin:0;color:var(--muted);font-size:13px">No accounts currently need attention.</p>`}
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-head"><h2>Top buying signals across the book</h2></div>
       <div class="body-pad">
         ${topSignals.map(([name, count]) => `
@@ -1154,6 +1177,7 @@ function renderDashboard() {
 
   const tbody = wrap.querySelector("#dash-tbody");
   ACCOUNTS.slice().sort((a, b) => b.score.total_score - a.score.total_score).forEach(a => tbody.appendChild(accountRow(a)));
+  wrap.querySelectorAll("[data-goto-account]").forEach(btn => btn.addEventListener("click", () => openAccount(btn.dataset.gotoAccount)));
   return wrap;
 }
 
