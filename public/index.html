@@ -2567,6 +2567,7 @@ function renderOpsConsole() {
         ` : ""}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn small" data-evidence="${esc(item.account.Id)}">${OPS_STATE.evidenceOpen[item.account.Id] ? "Hide" : "View"} Salesforce evidence</button>
+          <button class="btn small" data-followup="${esc(item.account.Id)}" data-question="Why does ${esc(item.account.Name).replace(/"/g, '&quot;')} rank ${esc(item.priority).toLowerCase()} priority, and what would move it up a tier?" ${busy || OPS_STATE.pendingApproval ? "disabled" : ""}>Ask why</button>
           ${opsRenderProposal(item)}
         </div>
         ${OPS_STATE.evidenceOpen[item.account.Id] ? opsRenderEvidence(item) : ""}
@@ -2626,6 +2627,7 @@ function renderOpsConsole() {
 
   wrap.querySelectorAll("[data-evidence]").forEach((btn) => btn.addEventListener("click", () => opsToggleEvidence(btn.dataset.evidence)));
   wrap.querySelectorAll("[data-prepare]").forEach((btn) => btn.addEventListener("click", () => opsPrepareAction(btn.dataset.prepare)));
+  wrap.querySelectorAll("[data-followup]").forEach((btn) => btn.addEventListener("click", () => opsAsk(btn.dataset.question)));
   wrap.querySelectorAll("[data-approve]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(true)));
   wrap.querySelectorAll("[data-reject]").forEach((btn) => btn.addEventListener("click", () => opsResolveApproval(false)));
 
