@@ -1,13 +1,16 @@
-// Netlify Function — real OpenAI call for the "AI Research & Reasoning" step.
+// Netlify Function — real Anthropic (Claude) call for the "AI Research &
+// Reasoning" step.
 //
 // Why this exists: the client-side demo simulates this step deterministically
 // so the pipeline works with zero setup. This function replaces that
-// simulation with a real call to the OpenAI API for a single account at a
-// time, using the site owner's OPENAI_API_KEY held only as a Netlify
-// environment variable — never in the repo, never sent to the browser, and
-// never pasted by a visitor. The response includes the real token usage,
-// latency and an estimated cost so the UI can show an honest agent-run trace
-// instead of just a "done" state.
+// simulation with a real call to the Anthropic Messages API for a single
+// account at a time, using the site owner's ANTHROPIC_API_KEY held only as a
+// Netlify environment variable — never in the repo, never sent to the
+// browser, and never pasted by a visitor. The response includes the real
+// token usage, latency and an estimated cost so the UI can show an honest
+// agent-run trace instead of just a "done" state. Using Anthropic here (same
+// as the AI Ops Console functions) means the whole site only needs one API
+// key, ANTHROPIC_API_KEY, instead of mixing providers.
 //
 // Safety: this is read-only (it never writes to a CRM or sends outreach), but
 // it still spends real API budget, so the input is restricted to the same
@@ -20,11 +23,11 @@ const KNOWN_COMPANIES = new Set([
   "Grupo Lala", "Mondelez International", "Danone"
 ]);
 
-// Published OpenAI pricing for gpt-4o-mini as of this writing — used only to
-// show an estimated cost per call, not billed anywhere from here.
-const PRICE_PER_1M_INPUT_TOKENS = 0.15;
-const PRICE_PER_1M_OUTPUT_TOKENS = 0.60;
-const MODEL = "gpt-4o-mini";
+// Published Anthropic pricing for claude-haiku-4-5 as of this writing — used
+// only to show an estimated cost per call, not billed anywhere from here.
+const PRICE_PER_1M_INPUT_TOKENS = 1.0;
+const PRICE_PER_1M_OUTPUT_TOKENS = 5.0;
+const MODEL = "claude-haiku-4-5";
 
 const SYSTEM_PROMPT = `You are a B2B GTM research assistant and outbound copywriter. You will be given a company's enrichment data and detected buying signals for a company evaluating Allie (AI agents for manufacturing — connects to PLCs, MES and ERPs through secure edge gateways to detect problems, recommend actions and coordinate responses in real time, improving availability, quality and throughput on the factory floor). Return ONLY valid JSON matching this schema, no prose outside the JSON:
 {
@@ -45,15 +48,16 @@ const SYSTEM_PROMPT = `You are a B2B GTM research assistant and outbound copywri
 }
 If confidence is "low" (little or no real signal), set outreach.subject_line to "(hold — insufficient signal)" and outreach.message to a one-sentence note that this account should go to nurture, not outbound — do not force a personalized pitch out of weak evidence.
 If contact_first_name is provided, open the message with it ("Hi {name} —"); if it is null, open with a name-free greeting ("Hi —") — never invent or guess a name.
-Never invent facts not present in the input. You do not set the ICP score or tier: those are provided to you as already-decided context, not something to re-evaluate. Never use em dashes anywhere in your output, including inside the outreach message; use a period, comma, or parentheses instead.`;
+Never invent facts not present in the input. You do not set the ICP score or tier: those are provided to you as already-decided context, not something to re-evaluate. Never use em dashes anywhere in your output, including inside the outreach message; use a period, comma, or parentheses instead.
+Respond with ONLY the raw JSON object described above — no markdown code fences, no prose before or after it.`;
 
 export default async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   }
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: "OPENAI_API_KEY not configured on this site" }), { status: 503 });
+    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY not configured on this site" }), { status: 503 });
   }
 
   let body;
@@ -80,49 +84,57 @@ export default async (req) => {
   });
 
   const startedAt = Date.now();
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 950,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userPayload }
-      ]
+      max_tokens: 1200,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userPayload }]
     })
   });
   const latencyMs = Date.now() - startedAt;
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    return new Response(JSON.stringify({ error: `OpenAI API error ${res.status}: ${errText.slice(0, 300)}` }), { status: 502 });
+    return new Response(JSON.stringify({ error: `Anthropic API error ${res.status}: ${errText.slice(0, 300)}` }), { status: 502 });
   }
 
   const data = await res.json();
-  const text = data.choices?.[0]?.message?.content || "";
+  const text = (data.content || [])
+    .filter((b) => b.type === "text")
+    .map((b) => b.text)
+    .join("")
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "");
+
   let parsed;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return new Response(JSON.stringify({ error: "OpenAI response was not valid JSON" }), { status: 502 });
+    return new Response(JSON.stringify({ error: "Claude response was not valid JSON" }), { status: 502 });
   }
 
   const usage = data.usage || {};
-  const promptTokens = usage.prompt_tokens || 0;
-  const completionTokens = usage.completion_tokens || 0;
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
   const estimatedCostUsd =
-    (promptTokens / 1_000_000) * PRICE_PER_1M_INPUT_TOKENS +
-    (completionTokens / 1_000_000) * PRICE_PER_1M_OUTPUT_TOKENS;
+    (inputTokens / 1_000_000) * PRICE_PER_1M_INPUT_TOKENS +
+    (outputTokens / 1_000_000) * PRICE_PER_1M_OUTPUT_TOKENS;
 
   return new Response(JSON.stringify({
-    reasoning: { ...parsed, icp_score: body.icp_score, tier: body.tier, source: "live_openai" },
+    reasoning: { ...parsed, icp_score: body.icp_score, tier: body.tier, source: "live_anthropic" },
     meta: {
       model: MODEL,
-      prompt_tokens: promptTokens,
-      completion_tokens: completionTokens,
-      total_tokens: usage.total_tokens || (promptTokens + completionTokens),
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
       latency_ms: latencyMs,
       estimated_cost_usd: Number(estimatedCostUsd.toFixed(6))
     }

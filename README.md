@@ -129,8 +129,8 @@ contra las estrategias que un rol de GTM AI Operator típicamente tiene que domi
 **La IA no toca todo el flujo.** El scoring ICP y el ruteo son y seguirán siendo
 determinísticos: el criterio de negocio es no gastar cómputo de modelo ni atención de
 ventas técnicas en una cuenta de baja calidad antes de que el score lo justifique. La IA —
-determinística en este demo, o un modelo de OpenAI en vivo si se activa desde el detalle
-de una cuenta — se usa únicamente donde el razonamiento no estructurado agrega valor:
+determinística en este demo, o un modelo de Anthropic (Claude) en vivo si se activa desde
+el detalle de una cuenta — se usa únicamente donde el razonamiento no estructurado agrega valor:
 sintetizar evidencia, formular una hipótesis de dolor operativo (marcada explícitamente
 `FACT` vs `INFERENCE`), identificar información faltante y redactar personalización
 fundamentada en evidencia citada. Nada de esto envía nada por sí solo — un humano aprueba
@@ -142,7 +142,7 @@ auto-sends").
 ```
 /public/index.html            → app completa (HTML + CSS + JS), un solo archivo
 /netlify/functions/route-to-bdr.mjs → backend real de orquestación (ver abajo)
-/netlify/functions/ai-reasoning.mjs → llamada real a OpenAI para el paso de razonamiento
+/netlify/functions/ai-reasoning.mjs → llamada real a Anthropic (Claude) para el paso de razonamiento
 /netlify/functions/gtm-ops-agent.mjs y _crm_*.mjs → AI Ops Console (Demo), ver abajo
 /gtm-agent-demo/                → demo local en Python (Claude Agent SDK), independiente de lo anterior
 /netlify.toml                  → configuración de deploy independiente en Netlify
@@ -154,12 +154,12 @@ Es un HTML estático sin build step — se puede abrir `public/index.html` direc
 un navegador, o desplegar `public/` como publish directory en Netlify (o cualquier host
 estático) usando este `netlify.toml`.
 
-## Modo OpenAI en vivo (opcional)
+## Modo Anthropic (Claude) en vivo (opcional)
 
-Desde el detalle de cualquier cuenta hay un panel "Run live AI reasoning (OpenAI)" que
+Desde el detalle de cualquier cuenta hay un panel "Run live AI reasoning (Claude)" que
 llama a `/.netlify/functions/ai-reasoning`, una Netlify Function que sostiene la
-`OPENAI_API_KEY` del dueño del sitio del lado del servidor y hace una llamada real a
-`gpt-4o-mini` para reemplazar, solo para esa cuenta y esa sesión de navegador, la
+`ANTHROPIC_API_KEY` del dueño del sitio del lado del servidor y hace una llamada real a
+`claude-haiku-4-5` para reemplazar, solo para esa cuenta y esa sesión de navegador, la
 simulación determinística del paso de razonamiento. El visitante no necesita pegar
 ninguna credencial propia — la función solo acepta las 15 empresas que ya están en el
 dataset público, para no convertirse en un proxy abierto de prompts arbitrarios. La
@@ -167,9 +167,10 @@ respuesta incluye tokens reales, latencia y costo estimado, que se muestran en e
 y se suman a un "AI spend" acumulado visible en Outcomes. El score ICP y la decisión de
 ruteo no cambian — siguen siendo deterministas.
 
-**Para activarlo**, agrega `OPENAI_API_KEY` (una API key de OpenAI) en el dashboard de
-Netlify de este sitio (Site configuration → Environment variables). Si no está
-configurada, el botón sigue mostrando la simulación determinística y explica por qué
+**Para activarlo**, agrega `ANTHROPIC_API_KEY` (una API key de Anthropic) en el dashboard
+de Netlify de este sitio (Site configuration → Environment variables) — es la misma
+variable que ya usa el AI Ops Console, así que una sola key activa todo el sitio. Si no
+está configurada, el botón sigue mostrando la simulación determinística y explica por qué
 falló, en vez de romperse silenciosamente.
 
 ## Orquestación en vivo — Zapier + HubSpot (opcional)

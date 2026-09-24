@@ -3,8 +3,9 @@
 // page. For the free-form chat version, see claude-agent-chat.mjs.
 //
 // Why this exists as a separate function/page: the rest of this site ("GTM
-// AI Outbound Engine") is a different demo — real public companies, OpenAI,
-// a documented MCP tool surface. This one is a second, self-contained demo
+// AI Outbound Engine") is a different demo — real public companies, a live
+// Anthropic reasoning call, a documented MCP tool surface. This one is a
+// second, self-contained demo
 // built for a Claude Agent SDK interview exercise. It uses its OWN fixed set
 // of five FICTIONAL accounts (all tagged "(Demo)") — never the real
 // companies from the other engine — and its own deterministic ICP scoring
