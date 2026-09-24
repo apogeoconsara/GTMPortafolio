@@ -7,10 +7,10 @@
 <style>
 /* Design tokens ------------------------------------------------------------
    Light theme — white/near-white ground so it reads as a familiar, modern
-   SaaS console rather than a dark ops terminal. Not a verified reproduction
-   of JumpCloud's own brand palette (couldn't fetch their site to confirm
-   exact hex values) — this is a professional identity/security-adjacent
-   teal-green accent chosen to feel at home next to that kind of product.
+   industrial-ops console rather than a dark terminal. Not a verified
+   reproduction of Allie's own brand palette (couldn't fetch their site to
+   confirm exact hex values) — this is a professional, industrial-adjacent
+   teal-green accent chosen to feel at home next to a factory-floor product.
    Color: Ink #F7F8FA (bg), Panel #FFFFFF (surfaces), Line #E2E6EB (borders),
    Text #101828 (primary) / #64748B (muted), Accent #0E8F76 (teal-green),
    Tier B #B45309 (amber), Tier C #64748B (slate)
@@ -393,7 +393,7 @@ tbody tr:hover { background: var(--panel-2); }
   <aside class="rail">
     <div class="rail-brand">GTM AI Outbound Engine</div>
     <div class="rail-sub">Signal-based account qualification</div>
-    <div class="rail-badge">Demo Mode · real Clay data</div>
+    <div class="rail-badge">Demo Mode · real public signal data</div>
     <div id="ai-mode-badge"></div>
     <nav>
       <button data-page="dashboard" class="active"><span class="dot"></span>Dashboard</button>
@@ -431,60 +431,65 @@ tbody tr:hover { background: var(--panel-2); }
    ========================================================================== */
 
 // ---------------------------------------------------------------------------
-// PHASE 1/2 — TARGET ACCOUNT INPUT + ENRICHMENT (REAL DATA)
-// This dataset was built from a live Clay enrichment run (find-and-enrich-company
-// + find-and-enrich-contacts-at-company) against real, named companies chosen as
-// plausible JumpCloud-shaped candidates — mid-market, multi-country and/or
-// hiring for IT/security roles. This is candidate research compiled from public
-// data (LinkedIn firmographics, public job postings, public press) for portfolio
-// purposes — it is NOT an active JumpCloud outbound campaign, and no company
-// listed here has been contacted. Every field below traces to a real Clay
-// enrichment result fetched on 2026-09-04; anything Clay could not confirm is
-// left "unknown" — never fabricated, same rule as the original seeded dataset.
-// In production this object is what Clay's webhook (POST /api/webhook/clay)
-// would populate on an ongoing basis instead of a one-time snapshot.
+// PHASE 1/2 — TARGET ACCOUNT INPUT + SIGNAL RESEARCH (REAL DATA)
+// This dataset was compiled by hand via public web research (news coverage,
+// investor releases, trade press — no Clay or other enrichment tool was
+// available for this pass) against real, named Tier-1 manufacturers in
+// brewing, food & beverage and CPG across the US, Mexico and LATAM — the
+// named-account universe SYS01 in the job posting describes. This is
+// candidate research for portfolio purposes — it is NOT an active Allie
+// outbound campaign, and no company listed here has been contacted.
+// IMPORTANT — contact-level enrichment: unlike a production pass with a tool
+// like Clay/ZoomInfo/LinkedIn Sales Navigator, this pass had no way to find
+// or verify a named plant-level contact, so every account's `contact` below
+// is honestly "unknown" rather than a fabricated name or email — the
+// buyer persona (Plant Director / VP of Operations / CTO) is inferred from
+// signals instead (see identifyPersona below), which is what a real BDR
+// would still need to run contact discovery against before a first touch.
+// Every capex/plant/layoff figure below is traceable to real, dated public
+// reporting (cited inline); anything not confirmed is marked "unknown"
+// rather than invented. Compiled 2026-09-24.
 // ---------------------------------------------------------------------------
 const COMPANIES = [
-  { id: "acc_01", company_name: "Webflow", website: "webflow.com", industry: "Software Development", employee_count: 1617, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB", "AR"], company_description: "Agentic web marketing platform for high-performing brands, with offices in San Francisco, London, Chicago and Buenos Aires.", estimated_growth: "+16% headcount YoY", technology_context: "unknown — Clay's tech-stack data point only covers the public marketing site, not internal IT/identity tooling", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Ty Sbano", title: "Chief Information Security Officer", email: "unknown", confidence: "medium" } },
-  { id: "acc_02", company_name: "Retool", website: "retool.com", industry: "Software Development", employee_count: 416, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB"], company_description: "Enterprise low-code platform for building internal tools, with offices in San Francisco, New York and London.", estimated_growth: "-13% headcount YoY (declining, per Clay)", technology_context: "Open reqs found via Clay for \"Application Security Engineer\" and \"IT Engineer\" (Sep 2026)", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "DJ McCulloch", title: "Head of Security", email: "unknown", confidence: "medium" } },
-  { id: "acc_03", company_name: "Clio", website: "clio.com", industry: "Software Development", employee_count: 2722, headquarters: "Burnaby, BC, Canada", countries_of_operation: ["CA", "IE", "AU", "US"], company_description: "Legal AI / practice-management platform, with offices in Burnaby, Toronto, Calgary, Dublin and Sydney.", estimated_growth: "+64% headcount YoY", technology_context: "Open req found via Clay for \"Application Security Developer\" (Sep 2026)", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-09-04", contact: { name: "George Totev", title: "VP of Security and CISO", email: "unknown", confidence: "medium" } },
-  { id: "acc_04", company_name: "Podium", website: "podium.com", industry: "Software Development", employee_count: 1638, headquarters: "Lehi, UT", countries_of_operation: ["US", "AU"], company_description: "AI-driven customer communication platform for local businesses, with offices in Lehi, Utah and Melbourne.", estimated_growth: "+13% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_05", company_name: "Zapier", website: "zapier.com", industry: "Software Development", employee_count: 1524, headquarters: "San Francisco, CA", countries_of_operation: ["US"], company_description: "Automation platform connecting apps and AI agents; Clay's own contact search for this company returned employees across the US, UK, India, Portugal and Canada, consistent with Zapier's long-standing distributed/remote-first operating model.", estimated_growth: "+14% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_06", company_name: "Motive", website: "gomotive.com", industry: "Software Development", employee_count: 6359, headquarters: "San Francisco, CA", countries_of_operation: ["US", "PK", "IN", "TW", "CA"], company_description: "Fleet and physical-operations management platform, with offices/teams in the US, Pakistan, India, Taiwan and Canada per Clay.", estimated_growth: "+29% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment; headcount is well above this demo's default 2,000-employee ICP ceiling", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_07", company_name: "Vercel", website: "vercel.com", industry: "Software Development", employee_count: 1014, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB", "CA", "ES", "IN"], company_description: "Frontend cloud / AI-agent deployment platform; Clay's contact search found real employees in the US, UK, Canada, Spain and India.", estimated_growth: "+32% headcount YoY", technology_context: "Open req found via Clay for \"Product Security Engineer\" (Sep 2026); a named VP of Security with a verified work email was found via Clay contact search", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Mukund S.", title: "VP of Security", email: "s@vercel.com", confidence: "high" } },
-  { id: "acc_08", company_name: "PostHog", website: "posthog.com", industry: "Software Development", employee_count: 219, headquarters: "San Francisco, CA", countries_of_operation: ["US", "GB", "PT", "ES", "IE"], company_description: "Open-source product analytics platform; Clay's contact search found real employees across the US, UK, Portugal, Spain and Ireland, with no single non-US office on file.", estimated_growth: "+90% headcount YoY", technology_context: "Company's own job postings state: \"We're a natively remote company. We default to async communication\" (quoted from a live PostHog job listing, Sep 2026)", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Felipe Almeida", title: "Security Engineer", email: "felipe.a@posthog.com", confidence: "high" } },
-  { id: "acc_09", company_name: "Buffer", website: "buffer.com", industry: "Technology, Information and Internet", employee_count: 328, headquarters: "San Francisco, CA", countries_of_operation: ["US", "LK", "EE", "PT"], company_description: "Social media management platform; Clay's contact search found real employees across the US, Sri Lanka, Estonia and Portugal.", estimated_growth: "+32% headcount YoY", technology_context: "No currently open IT/security req found via Clay, but a named Security Engineer with a verified work email was found via Clay contact search", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Adnan Issadeen", title: "Security Engineer", email: "adnan@buffer.com", confidence: "high" } },
-  { id: "acc_10", company_name: "Help Scout", website: "helpscout.com", industry: "Technology, Information and Internet", employee_count: 290, headquarters: "Boston, MA", countries_of_operation: ["US", "CA", "IT", "AU"], company_description: "Customer support platform; job postings state \"We've been a fully remote team since day one, with 120+ teammates now all over the world.\"", estimated_growth: "+9% headcount YoY", technology_context: "Open reqs found via Clay (VP of Marketing, Director of Performance Marketing) are not IT/security-specific; a named Director of Privacy and Security was found via Clay contact search", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "Pilar Garcia", title: "Director of Privacy and Security", email: "unknown", confidence: "medium" } },
-  { id: "acc_11", company_name: "37signals", website: "37signals.com", industry: "Software Development", employee_count: 176, headquarters: "Chicago, IL", countries_of_operation: ["US", "ES", "BR", "DE", "GB", "CA"], company_description: "Makers of Basecamp and HEY; Clay's contact search found real employees across Spain, Brazil, Germany, the UK and Canada, with only a Chicago office on file.", estimated_growth: "+1% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay; headcount is below this demo's 200-employee ICP floor", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_12", company_name: "Loom", website: "loom.com", industry: "Online Audio and Video Media", employee_count: 295, headquarters: "San Francisco, CA", countries_of_operation: ["US"], company_description: "Async video messaging platform, part of Atlassian since 2023; Atlassian's own description of the deal cites championing \"remote-first, asynchronous work.\"", estimated_growth: "+3% headcount YoY", technology_context: "unknown — no IT/security-specific open reqs found via Clay as of this enrichment", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_13", company_name: "GitLab", website: "gitlab.com", industry: "IT Services and IT Consulting", employee_count: 3432, headquarters: "San Francisco, CA", countries_of_operation: ["US"], company_description: "DevSecOps platform, publicly documented as an all-remote company since founding; headcount exceeds this demo's 2,000-employee ICP ceiling.", estimated_growth: "+8% headcount YoY", technology_context: "unknown — open reqs found via Clay were recruiting/engineering roles, not IT/security decision-maker hires", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_14", company_name: "Automattic", website: "wordpress.com", industry: "Software Development", employee_count: 2170, headquarters: "San Francisco, CA", countries_of_operation: ["US", "ES", "TR", "CA", "UY", "BD", "FR", "BR", "DK"], company_description: "Parent company of WordPress.com, WooCommerce, Tumblr and Jetpack; its own description states \"1,730+ Automatticians in 92 countries.\" A real 2025 restructuring announcement is on file.", estimated_growth: "-46% headcount YoY (real restructuring/layoffs per Clay)", technology_context: "unknown — no IT/security-specific open reqs found via Clay; headcount is just above this demo's 2,000-employee ICP ceiling", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
-  { id: "acc_15", company_name: "Doist", website: "doist.com", industry: "Software Development", employee_count: 125, headquarters: "unknown", countries_of_operation: ["US", "ZA", "DE", "GB", "FR", "BR"], company_description: "Makers of Todoist and Twist; its own description states \"our fully remote team of 100+ people across 35+ countries.\" Bootstrapped, never raised venture funding.", estimated_growth: "+6% headcount YoY", technology_context: "unknown — no open reqs found via Clay as of this enrichment; headcount is below this demo's 200-employee ICP floor", remote_or_hybrid_signal: true, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-04", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } }
+  { id: "acc_01", company_name: "Grupo Modelo (AB InBev)", website: "grupomodelo.com", industry: "Brewing", employee_count: 29000, headquarters: "Mexico City, Mexico", countries_of_operation: ["MX"], company_description: "Brewer of Corona, Modelo Especial and Pacífico; part of AB InBev. Building an ~$760M brewing and bottling complex in Apan, Hidalgo (up to 12M hectoliters/year), part of a pledged $3.6B investment across Mexico for 2025-2027 (AB InBev newsroom / Drinks Business, Jul 2026).", estimated_growth: "unknown — no public headcount trend confirmed for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_02", company_name: "Constellation Brands", website: "cbrands.com", industry: "Brewing", employee_count: 9000, headquarters: "Victor, NY", countries_of_operation: ["US", "MX"], company_description: "Brewer of Modelo/Corona brands under license in the US and owner of new Mexican capacity; new Veracruz brewery began hiring in 2026 (600+ workers by Jul 2026, targeting ~800), part of a ~$3B Mexico expansion/modernization plan for fiscal 2025-2028 — while separately laying off part of its Rochester, NY workforce as part of a companywide restructuring (218 workers across 2 WARN notices, Jul 2024-Apr 2026), citing tariffs and softer US beer demand (Tridge, Rio Times, RBJ, WARN Tracker, 2025-2026).", estimated_growth: "unknown — no confirmed headcount trend at the group level", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: true, geographic_expansion_signal: true, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_03", company_name: "Grupo Bimbo", website: "grupobimbo.com", industry: "Food Manufacturing (Baking)", employee_count: 136000, headquarters: "Mexico City, Mexico", countries_of_operation: ["MX", "US", "CA", "BR", "AR", "ES", "GB"], company_description: "World's largest baking company; new ~$101M plant announced for Puebla (La Resurrección Industrial Park), alongside a pledged ~$1B US investment for 2026-2028 (Food Business News, Grupo Bimbo investor release, 2026). 2026 group capex guidance was trimmed from a $1.2-1.4B range to $1.0-1.2B.", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_04", company_name: "PepsiCo Mexico (Sabritas)", website: "pepsico.com", industry: "Snack Foods / CPG", employee_count: 318000, headquarters: "Purchase, NY (Sabritas ops: Celaya, Guanajuato)", countries_of_operation: ["US", "MX"], company_description: "PepsiCo's Mexican snack division; opened a new ~$467M Sabritas plant in Celaya (its first from-scratch Mexico plant in 20+ years, 66,500 metric tons/year capacity for Sabritas/Doritos/Cheetos/Ruffles), part of a $2B multiyear Mexico plan for 2025-2028 (PotatoPro, ProFood World, Apr 2026).", estimated_growth: "unknown — no confirmed headcount trend for the division", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_05", company_name: "Molson Coors", website: "molsoncoors.com", industry: "Brewing", employee_count: 15700, headquarters: "Golden, CO / Chicago, IL", countries_of_operation: ["US", "CA", "GB"], company_description: "Global brewer (Coors, Miller, Blue Moon). Its Golden, CO \"G150\" facility runs AI-driven fermentation monitoring, self-opening valves/self-cleaning tanks and automated logistics, citing ~15% waste reduction (Colorado Sun, 2024-2025). A new $450M cost-savings program under \"Horizon 2030\" launches in 2026, explicitly funding productivity/automation investment and organizational restructuring, on ~$650M/year capex (Investing.com CAGNY 2026 transcript, Q2 2026 slides).", estimated_growth: "unknown — no confirmed headcount trend beyond the stated 2026 restructuring", technology_context: "Confirmed live AI/automation deployment: AI-driven fermentation monitoring, self-cleaning tanks and automated logistics at the Golden, CO brewery (Colorado Sun, 2024-2025)", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_06", company_name: "Nestlé", website: "nestle.com", industry: "Food & Beverage Manufacturing", employee_count: 275000, headquarters: "Vevey, Switzerland", countries_of_operation: ["CH", "BR", "MX", "TH", "US"], company_description: "World's largest food & beverage company. $382M investment in Ituiutaba, Brazil (infant formula manufacturing) plus a further ~$106M expansion of its Araçatuba, Brazil plant through 2028 (Rio Times, 2026). Opened a System Technology Center in Orbe, Switzerland in H1 2026 to develop sensors, robotics and AI for manufacturing, and has stated an ambition toward fully autonomous AI-powered plants (Confectionery Production, rudyl.ai, 2026).", estimated_growth: "unknown — no confirmed group-wide headcount trend for this pass", technology_context: "Confirmed AI/automation push: new System Technology Center (Orbe, opened H1 2026) developing AI, robotics and sensor tech for manufacturing, stated ambition for fully autonomous AI-powered plants", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_07", company_name: "Coca-Cola FEMSA", website: "coca-colafemsa.com", industry: "Beverage Bottling", employee_count: 90000, headquarters: "Mexico City, Mexico", countries_of_operation: ["MX", "BR", "AR", "CO", "CR", "UY", "PA", "GT"], company_description: "World's largest Coca-Cola bottler by volume. Announced May 2026 strategic investments expanding production capacity and modernizing infrastructure across Latin America, including a $50M expansion of its Calle Blancos plant in Costa Rica, with further capacity/logistics projects in Argentina and Uruguay (FEMSA press room, May 2026).", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_08", company_name: "Arca Continental", website: "arcacontal.com", industry: "Beverage Bottling", employee_count: 87000, headquarters: "Monterrey, Mexico", countries_of_operation: ["MX", "US", "EC", "PE", "AR"], company_description: "Second-largest Coca-Cola bottler in Latin America. Announced a $1.0-1.1B investment for 2026 (50% allocated to Mexico) explicitly covering production capacity, \"digital infrastructure\" and distribution — including a recent CEDI distribution-center expansion in Delicias, Chihuahua tripling storage capacity (just-drinks, Invest Monterrey, 2026).", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "Digital transformation named explicitly in the 2026 capex plan (\"expanding production, digital infrastructure and sustainable distribution\"), though no specific AI/agent deployment confirmed", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_09", company_name: "JBS USA", website: "jbsfoodsgroup.com", industry: "Meat & Protein Processing", employee_count: 66000, headquarters: "Greeley, CO", countries_of_operation: ["US", "BR"], company_description: "US meat-processing arm of JBS (global parent ~$1.18B in H1 2026 capex, 44% facilities / 66% capacity expansion). Building a $135M sausage plant and a separate bacon/sausage facility in Iowa (operational mid-2026, ~400-500 jobs combined), a $400M chicken plant in Georgia, and $200M in beef-operations upgrades in Cactus, TX and Greeley, CO (Food Dive, Manufacturing Dive, 2026).", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_10", company_name: "Heineken México (Cuauhtémoc Moctezuma)", website: "heinekenmexico.com", industry: "Brewing", employee_count: 13000, headquarters: "Monterrey, Mexico", countries_of_operation: ["MX"], company_description: "Heineken's Mexican brewing division. New ~$510M / 8.7B-peso brewery in Kanasín, Yucatán — Heineken's 8th plant in Mexico, ~2,000 jobs, beginning operations in early 2026, the company's first plant in the southeast of the country (Mexico News Daily, Bloomberg Línea, 2023-2026).", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_11", company_name: "Tyson Foods", website: "tysonfoods.com", industry: "Meat & Protein Processing", employee_count: 140000, headquarters: "Springdale, AR", countries_of_operation: ["US"], company_description: "One of the largest US meat processors. Permanently closed its Lexington, NE beef plant (Jan 2026, 3,212 jobs), shifted Amarillo, TX to a single shift (1,761 jobs), and closed beef plants in Joslin, IL and Eagle Mountain, UT — roughly 5,000 employees laid off across 2025-2026, driven by a historic US cattle-herd shortage (86.2M head, a ~75-year low per USDA) rather than a demand problem (TheStreet, Salt Lake Tribune, Democracy Now, 2026).", estimated_growth: "declining — ~5,000 layoffs from beef-plant closures/consolidation across 2025-2026 (real, cited above)", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_12", company_name: "Kraft Heinz", website: "kraftheinzcompany.com", industry: "CPG / Food Manufacturing", employee_count: 36000, headquarters: "Chicago, IL / Pittsburgh, PA", countries_of_operation: ["US", "CA", "NZ"], company_description: "Global packaged-food and condiments maker. New CEO (Steve Cahillane) joined Jan 2026 after a $4.7B FY loss; the previously announced split into two companies was paused Feb 2026; ~1,000 roles cut from the ~36,000-person workforce, with a further 400 roles planned outside North America through 2026. Its Wattie's (NZ) unit confirmed closing 3 manufacturing plants plus Hastings frozen-packaging lines (~300 roles, Mar 2026) (Food Logistics, IndustryWeek, GV Wire, Metaintro, 2025-2026).", estimated_growth: "declining — real 2025-2026 restructuring and plant closures cited above", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: false, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_13", company_name: "Grupo Lala", website: "lala.com.mx", industry: "Dairy", employee_count: 30000, headquarters: "Torreón, Mexico", countries_of_operation: ["MX", "US", "BR"], company_description: "Largest dairy company in Mexico, operating 25 plants across Mexico, Brazil and the US. Invested MXN $1,129M in Q1 2026 capex (4.2% of sales) for capacity expansion and maintenance across its plant network, part of a stated 2030 growth strategy; also reported maintaining employment through decreased 2025 dairy sales (Cronista, dairynews.today, 2026).", estimated_growth: "unknown — employment reported as maintained despite softer 2025 sales, not a confirmed growth figure", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_14", company_name: "Mondelez International", website: "mondelezinternational.com", industry: "Confectionery / CPG", employee_count: 80000, headquarters: "Chicago, IL", countries_of_operation: ["US", "MX"], company_description: "Global snacks/confectionery maker (Oreo, Ritz, Chips Ahoy). Investing $130M in its North America biscuits supply chain, installing four new advanced manufacturing lines at its Salinas, Mexico facility — while laying off 600 workers from its Chicago bakery as production shifts to the more automated Mexico plant (Food Dive, 2026).", estimated_growth: "unknown — no confirmed group-wide headcount trend beyond the cited Chicago layoffs", technology_context: "Confirmed automation investment: $130M installing four new advanced manufacturing lines at the Salinas, Mexico facility, explicitly replacing older Chicago production", remote_or_hybrid_signal: true, it_hiring_signal: true, security_hiring_signal: true, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } },
+  { id: "acc_15", company_name: "Danone", website: "danone.com", industry: "Dairy / Food & Beverage", employee_count: 90000, headquarters: "Paris, France (Mexico ops: Puebla)", countries_of_operation: ["FR", "MX"], company_description: "Global dairy and plant-based food company. Confirmed (Jul 2026) it is expanding production capacity at its plant in the Resurrección Industrial Park, Puebla, Mexico — announced alongside Grupo Bimbo's new facility in the same park — but the specific investment amount was not disclosed in available sources as of this pass (dairynews.today, Jul 2026).", estimated_growth: "unknown — no confirmed headcount trend for this pass", technology_context: "unknown — no AI/automation-specific announcement found for this pass", remote_or_hybrid_signal: false, it_hiring_signal: true, security_hiring_signal: false, geographic_expansion_signal: false, last_enriched: "2026-09-24", contact: { name: "unknown", title: "unknown", email: "unknown", confidence: "low" } }
 ];
 
-const TODAY = new Date("2026-09-04T00:00:00Z");
+const TODAY = new Date("2026-09-24T00:00:00Z");
 
 // ---------------------------------------------------------------------------
 // PHASE 4 — configurable scoring weights + ICP thresholds
 // Editable at runtime from the "ICP Config" tab. Nothing here should be read
-// as JumpCloud's actual internal qualification criteria — see the notice on
+// as Allie's actual internal qualification criteria — see the notice on
 // that tab.
 // ---------------------------------------------------------------------------
 const DEFAULT_ICP_CONFIG = {
-  headcount_min: 200,
-  headcount_max: 2000,
-  tierA_threshold: 80,
-  tierB_threshold: 60,
+  headcount_min: 5000,
+  headcount_max: 400000,
+  tierA_threshold: 75,
+  tierB_threshold: 55,
   min_signals_for_evidence: 2,
-  target_industries: ["Freight & Supply Chain Tech", "Healthcare SaaS", "Industrial Automation",
-    "Life Sciences", "Legal Services", "Professional Services", "Education Technology",
-    "Gaming / Interactive Media", "Manufacturing", "Financial Services", "Healthcare (Small Practice)",
-    "Software Development", "Technology, Information and Internet"],
-  target_geos: ["US", "CA", "UK", "GB", "DE", "CH", "AU", "SG", "FR", "MX", "JP"],
+  target_industries: ["Brewing", "Food Manufacturing (Baking)", "Snack Foods / CPG",
+    "Food & Beverage Manufacturing", "Beverage Bottling", "Meat & Protein Processing",
+    "CPG / Food Manufacturing", "Dairy", "Confectionery / CPG", "Dairy / Food & Beverage"],
+  target_geos: ["US", "MX", "BR", "AR", "CO", "PE", "CL", "UY", "CR", "PA", "GT", "EC"],
   weights: {
-    company_fit: { headcount_band: 15, relevant_profile: 10, multi_location: 10, relevant_geo: 5 },
-    signals: { it_security_hiring: 15, remote_hybrid: 10, growing_headcount: 10, geo_expansion: 5 },
-    contact: { relevant_decision_maker: 10, contact_available: 5, responsibilities_match: 5 }
+    company_fit: { headcount_band: 10, relevant_profile: 10, multi_location: 10, relevant_geo: 5 },
+    signals: { automation_ai: 20, capex_new_plant: 15, layoffs_restructuring: 10, headcount_growth: 5 },
+    contact: { persona_mapped: 15 }
   }
 };
 
@@ -494,14 +499,21 @@ let ICP_CONFIG = JSON.parse(JSON.stringify(DEFAULT_ICP_CONFIG));
 
 // ---------------------------------------------------------------------------
 // PHASE 3 — SIGNAL ENGINE
-// Every signal cites the enrichment field it was derived from — nothing here
-// is invented beyond the seeded demo record. Each signal also carries an
+// Every signal cites the field/text it was derived from — nothing here is
+// invented beyond the seeded demo record. Each signal also carries an
 // observed date + freshness so the UI can show how current the evidence is.
+// Signal categories map to the job posting's SYS02 language: tech/automation
+// signals, funding/expansion capex, layoffs/headcount swings, new plant
+// announcements. "Champion job changes" (also named in SYS01/SYS02) is not
+// implemented here — it needs a live contact-monitoring tool this pass
+// didn't have; see the README's coverage table.
 // ---------------------------------------------------------------------------
 function daysSince(dateStr) {
   const d = new Date(dateStr + "T00:00:00Z");
   return Math.round((TODAY - d) / 86400000);
 }
+
+const LAYOFF_PATTERN = /laid off|laying off|layoffs?|plant closures?|closing \d|closed its|permanently closed|job cuts|roles? (cut|planned) |restructuring/i;
 
 function detectSignals(c) {
   const signals = [];
@@ -511,34 +523,46 @@ function detectSignals(c) {
       observed_date: c.last_enriched, freshness_days: daysSince(c.last_enriched)
     });
 
-  push("Remote or distributed workforce", c.remote_or_hybrid_signal,
-    c.remote_or_hybrid_signal ? `Distributed/remote workforce noted in company research — ${c.company_description}` : "No remote/hybrid indicator on file",
-    c.remote_or_hybrid_signal ? "high" : "n/a", "enrichment.company_description");
+  // Stored field is named remote_or_hybrid_signal for minimal schema churn
+  // from the previous vertical, but here it flags a confirmed AI/automation
+  // or digital-manufacturing initiative already underway at the account.
+  push("AI / automation initiative underway", c.remote_or_hybrid_signal,
+    c.remote_or_hybrid_signal ? `Automation/AI signal on file: ${c.technology_context}` : "No confirmed AI/automation initiative on file",
+    c.remote_or_hybrid_signal ? "high" : "n/a", "research.technology_context");
 
-  push("IT hiring", c.it_hiring_signal,
-    c.it_hiring_signal ? `Open or recent IT req referenced in tech context: "${c.technology_context}"` : "No open IT req detected",
-    c.it_hiring_signal ? "high" : "n/a", "enrichment.it_hiring_signal");
+  // capex_or_new_plant is true if either legacy boolean is set — mirrors the
+  // original app's pattern of folding two related boolean fields into one
+  // scored bucket (a new plant announcement and a broader capex commitment
+  // are the same buying signal for this ICP: budget + a facility that will
+  // need to run at target availability/quality/throughput from day one).
+  const capexDetected = c.it_hiring_signal || c.security_hiring_signal;
+  push("New plant or expansion capex committed", capexDetected,
+    capexDetected ? `Capex/new-plant signal on file: ${c.company_description}` : "No new plant or expansion capex announcement found",
+    capexDetected ? "high" : "n/a", "research.company_description");
 
-  push("Cybersecurity / IAM hiring", c.security_hiring_signal,
-    c.security_hiring_signal ? `Security/IAM hiring or initiative referenced: "${c.technology_context}"` : "No security hiring signal detected",
-    c.security_hiring_signal ? "high" : "n/a", "enrichment.security_hiring_signal");
-
-  push("Geographic expansion", c.geographic_expansion_signal,
-    c.geographic_expansion_signal ? `Operating across ${c.countries_of_operation.length} countries: ${c.countries_of_operation.join(", ")}` : "Single-country footprint",
-    c.geographic_expansion_signal ? "medium" : "n/a", "enrichment.countries_of_operation");
+  const layoffsDetected = LAYOFF_PATTERN.test(c.company_description) || LAYOFF_PATTERN.test(c.estimated_growth || "");
+  push("Layoffs or restructuring", layoffsDetected,
+    layoffsDetected ? `Layoffs/restructuring referenced: ${c.company_description}` : "No layoffs or restructuring found",
+    layoffsDetected ? "high" : "n/a", "research.company_description");
 
   const growthPct = parseGrowth(c.estimated_growth);
-  push("Rapid headcount growth", growthPct !== null && growthPct >= 15,
-    growthPct !== null ? `Estimated growth: ${c.estimated_growth}` : "Growth not reported",
-    growthPct !== null ? (growthPct >= 25 ? "high" : "medium") : "n/a", "enrichment.estimated_growth");
+  push("Headcount growth trend confirmed", growthPct !== null,
+    growthPct !== null ? `Estimated growth/trend: ${c.estimated_growth}` : "Growth/headcount trend not confirmed for this pass",
+    growthPct !== null ? "medium" : "n/a", "research.estimated_growth");
 
-  push("Multiple offices or countries", c.countries_of_operation.length > 1,
-    `${c.countries_of_operation.length} countries of operation on file`,
-    c.countries_of_operation.length > 1 ? "high" : "n/a", "enrichment.countries_of_operation");
+  push("Multi-country operations", c.countries_of_operation.length > 1,
+    `${c.countries_of_operation.length} countries of operation on file: ${c.countries_of_operation.join(", ")}`,
+    c.countries_of_operation.length > 1 ? "high" : "n/a", "research.countries_of_operation");
 
   return signals;
 }
 
+// Real dataset doesn't carry a parseable YoY headcount % for any of the 15
+// accounts this pass (unlike the previous vertical's Clay-sourced growth
+// figures) — this only returns non-null for a future account where one is
+// confirmed, e.g. "+8% headcount YoY"; a qualitative "declining"/"growing"
+// note in estimated_growth is surfaced as its own signal text instead, not
+// forced through this parser.
 function parseGrowth(str) {
   const m = /(-)?\+?(\d+)%/.exec(str || "");
   if (!m) return null;
@@ -557,39 +581,39 @@ function scoreAccount(c, signals) {
   if (c.employee_count >= ICP_CONFIG.headcount_min && c.employee_count <= ICP_CONFIG.headcount_max) { fit += w.company_fit.headcount_band; notes.push(`+${w.company_fit.headcount_band} headcount in ${ICP_CONFIG.headcount_min}–${ICP_CONFIG.headcount_max} band (${c.employee_count})`); }
   else notes.push(`+0 headcount outside ${ICP_CONFIG.headcount_min}–${ICP_CONFIG.headcount_max} band (${c.employee_count})`);
 
-  if (ICP_CONFIG.target_industries.includes(c.industry)) { fit += w.company_fit.relevant_profile; notes.push(`+${w.company_fit.relevant_profile} B2B/modern-workforce profile (${c.industry})`); }
+  if (ICP_CONFIG.target_industries.includes(c.industry)) { fit += w.company_fit.relevant_profile; notes.push(`+${w.company_fit.relevant_profile} brewing/food & bev/CPG manufacturing profile (${c.industry})`); }
   else notes.push(`+0 industry profile not a strong match (${c.industry})`);
 
   if (c.countries_of_operation.length > 1) { fit += w.company_fit.multi_location; notes.push(`+${w.company_fit.multi_location} multi-location (${c.countries_of_operation.length} countries)`); }
   else notes.push(`+0 single location`);
 
   const relevantGeo = c.countries_of_operation.some(g => ICP_CONFIG.target_geos.includes(g));
-  if (relevantGeo) { fit += w.company_fit.relevant_geo; notes.push(`+${w.company_fit.relevant_geo} relevant geography`); }
+  if (relevantGeo) { fit += w.company_fit.relevant_geo; notes.push(`+${w.company_fit.relevant_geo} relevant geography (US/Mexico/LATAM)`); }
   else notes.push(`+0 geography not in target list`);
 
   let sig = 0;
   const has = n => signals.find(s => s.signal_name === n)?.detected;
-  if (has("IT hiring") || has("Cybersecurity / IAM hiring")) { sig += w.signals.it_security_hiring; notes.push(`+${w.signals.it_security_hiring} IT/security hiring signal detected`); }
-  else notes.push(`+0 no IT/security hiring signal`);
+  if (has("AI / automation initiative underway")) { sig += w.signals.automation_ai; notes.push(`+${w.signals.automation_ai} confirmed AI/automation initiative`); }
+  else notes.push(`+0 no confirmed AI/automation initiative`);
 
-  if (has("Remote or distributed workforce")) { sig += w.signals.remote_hybrid; notes.push(`+${w.signals.remote_hybrid} remote/hybrid workforce`); }
-  else notes.push(`+0 not remote/hybrid`);
+  if (has("New plant or expansion capex committed")) { sig += w.signals.capex_new_plant; notes.push(`+${w.signals.capex_new_plant} new plant or expansion capex committed`); }
+  else notes.push(`+0 no new plant/capex signal`);
 
-  if (has("Rapid headcount growth")) { sig += w.signals.growing_headcount; notes.push(`+${w.signals.growing_headcount} growing headcount`); }
-  else notes.push(`+0 headcount not growing`);
+  if (has("Layoffs or restructuring")) { sig += w.signals.layoffs_restructuring; notes.push(`+${w.signals.layoffs_restructuring} layoffs/restructuring detected (cost pressure → efficiency mandate)`); }
+  else notes.push(`+0 no layoffs/restructuring detected`);
 
-  if (has("Geographic expansion")) { sig += w.signals.geo_expansion; notes.push(`+${w.signals.geo_expansion} geographic expansion`); }
-  else notes.push(`+0 no geographic expansion`);
+  if (has("Headcount growth trend confirmed")) { sig += w.signals.headcount_growth; notes.push(`+${w.signals.headcount_growth} headcount/growth trend confirmed`); }
+  else notes.push(`+0 no confirmed headcount/growth trend`);
 
   let contact = 0;
-  const hasContact = c.contact.name !== "unknown";
-  const relevantTitle = /IT|Security|CIO|Identity|Access/i.test(c.contact.title || "");
-  if (hasContact && relevantTitle) { contact += w.contact.relevant_decision_maker; notes.push(`+${w.contact.relevant_decision_maker} relevant IT/security decision maker identified`); }
-  else notes.push(`+0 no confirmed relevant decision maker`);
-  if (c.contact.email !== "unknown") { contact += w.contact.contact_available; notes.push(`+${w.contact.contact_available} contact info available`); }
-  else notes.push(`+0 no contact info on file`);
-  if (hasContact && relevantTitle && c.contact.confidence === "high") { contact += w.contact.responsibilities_match; notes.push(`+${w.contact.responsibilities_match} responsibilities match likely pain area`); }
-  else notes.push(`+0 responsibilities match unconfirmed`);
+  // No contact-enrichment tool (Clay/ZoomInfo/Sales Navigator) was available
+  // for this pass, so every account's contact is honestly "unknown" (see the
+  // COMPANIES comment above) — but the likely buyer persona (Plant Director
+  // / VP of Operations / CTO) is still inferable from signals alone for a
+  // curated Tier-1 manufacturer, which is what this point actually credits.
+  const personaMapped = identifyPersona(c, signals).persona !== "unknown";
+  if (personaMapped) { contact += w.contact.persona_mapped; notes.push(`+${w.contact.persona_mapped} buyer persona mapped from signals (no named contact on file — see README)`); }
+  else notes.push(`+0 could not map a buyer persona`);
 
   const total = fit + sig + contact;
   const tier = total >= ICP_CONFIG.tierA_threshold ? "A" : total >= ICP_CONFIG.tierB_threshold ? "B" : "C";
@@ -599,19 +623,21 @@ function scoreAccount(c, signals) {
 
 // ---------------------------------------------------------------------------
 // PHASE 6 — PERSONA IDENTIFICATION
+// Maps to the buyer personas the job posting names explicitly: plant
+// directors, VPs of Operations, and CTOs at global brewers/food/CPG groups.
 // ---------------------------------------------------------------------------
 function identifyPersona(c, signals) {
-  let persona = "Director of IT";
-  let reason = "Default IT decision-maker persona for a company this size.";
-  if (signals.find(s => s.signal_name === "Cybersecurity / IAM hiring")?.detected) {
-    persona = c.employee_count > 500 ? "CIO / VP IT (security-adjacent)" : "IT Operations Director";
-    reason = "Active security/IAM hiring signal indicates identity and access management is already a budgeted priority.";
-  } else if (c.employee_count > 600) {
-    persona = "VP IT";
-    reason = "Company size suggests IT decisions route through a VP-level owner rather than a single admin.";
-  } else if (signals.find(s => s.signal_name === "Remote or distributed workforce")?.detected) {
-    persona = "Head of IT";
-    reason = "Distributed workforce puts device/identity ownership on a centralized IT lead.";
+  let persona = "VP of Operations";
+  let reason = "Default operational buyer persona for a manufacturer this size — capex and plant-level decisions typically route through Operations.";
+  if (signals.find(s => s.signal_name === "AI / automation initiative underway")?.detected) {
+    persona = "CTO / VP of Digital Manufacturing";
+    reason = "An active AI/automation initiative signals a technical buyer with budget and mandate already exists for exactly this category.";
+  } else if (signals.find(s => s.signal_name === "New plant or expansion capex committed")?.detected) {
+    persona = "VP of Operations";
+    reason = "A new plant or expansion capex commitment puts ownership of ramping that facility to target availability/quality/throughput with a VP of Operations.";
+  } else if (signals.find(s => s.signal_name === "Layoffs or restructuring")?.detected) {
+    persona = "Plant Director";
+    reason = "Cost pressure and restructuring put efficiency ownership with plant-level leadership, not corporate strategy.";
   }
   return {
     persona,
@@ -637,20 +663,23 @@ function generateAIReasoning(c, signals, score) {
   const primary = detected.sort((a, b) => (b.confidence === "high") - (a.confidence === "high"))[0];
   const secondary = detected.filter(s => s !== primary).map(s => s.signal_name);
   const missing = [];
-  if (c.contact.name === "unknown") missing.push("confirmed IT/security decision-maker contact");
-  if (c.estimated_growth === "unknown") missing.push("headcount growth trend");
-  if (c.technology_context === "unknown") missing.push("current identity/device management stack");
+  if (c.contact.name === "unknown") missing.push("confirmed plant-level decision-maker contact (no contact-enrichment tool used this pass)");
+  if (c.estimated_growth === "unknown" || /unknown/i.test(c.estimated_growth)) missing.push("confirmed headcount/growth trend");
+  if (c.technology_context === "unknown" || /unknown/i.test(c.technology_context)) missing.push("current automation/digital-manufacturing maturity");
 
   let painHypothesis, reasonNow;
-  if (primary?.signal_name.includes("hiring")) {
-    painHypothesis = `INFERENCE: the open IT/security role suggests ${c.company_name} is currently under-resourced to manage identity and device access at its current headcount — this is a plausible read of the hiring signal, not a confirmed pain point.`;
-    reasonNow = "A live hiring signal means budget and mandate likely already exist — outreach timed to a hiring window has a materially better chance of reaching someone with an active mandate.";
-  } else if (primary?.signal_name.includes("remote") || primary?.signal_name.includes("Remote")) {
-    painHypothesis = `INFERENCE: a distributed workforce without a confirmed unified identity layer (${c.technology_context}) raises the likelihood of fragmented device and access management — inferred from the workforce structure, not verified directly.`;
-    reasonNow = "Distributed-workforce companies without a named identity vendor are in-market more often than steady-state on-prem shops.";
-  } else if (primary?.signal_name.includes("expansion") || primary?.signal_name.includes("countries")) {
-    painHypothesis = `INFERENCE: expanding into ${c.countries_of_operation.length} countries typically forces a re-evaluation of identity and device policy to stay consistent across regions — this is a category-level pattern, not a confirmed statement from ${c.company_name}.`;
-    reasonNow = "Expansion phases are a known trigger point where IT re-evaluates its identity stack before scale makes migration harder.";
+  if (primary?.signal_name.includes("automation")) {
+    painHypothesis = `INFERENCE: an account already investing in AI/automation for one line or plant (${c.technology_context}) is plausibly looking to standardize that pattern across more sites rather than re-build it bespoke each time — this is a plausible read of a live initiative, not a confirmed roadmap statement from ${c.company_name}.`;
+    reasonNow = "An active automation/AI initiative means budget and technical mandate already exist — outreach timed to a live initiative reaches someone actively evaluating this category, not someone who needs to be sold on the category itself.";
+  } else if (primary?.signal_name.includes("plant") || primary?.signal_name.includes("capex")) {
+    painHypothesis = `INFERENCE: ramping a new plant or expansion to target availability/quality/throughput on the original timeline is a known failure point without real-time visibility across PLC/MES/ERP from day one — inferred from the scale of the announced investment, not a confirmed statement from ${c.company_name}.`;
+    reasonNow = "New-plant and expansion-capex windows are when the operating model for a site gets set — reaching the VP of Operations before that model hardens has a materially better chance of a real evaluation.";
+  } else if (primary?.signal_name.includes("Layoffs") || primary?.signal_name.includes("restructuring")) {
+    painHypothesis = `INFERENCE: leaner plant teams after layoffs/restructuring at ${c.company_name} typically need automated detection and coordination to hold the same availability/quality/throughput with fewer people watching dashboards — this is a category-level pattern following cost pressure, not a confirmed internal priority.`;
+    reasonNow = "Restructuring windows create real urgency to do more with less on the plant floor — that budget conversation is happening now, not in a future planning cycle.";
+  } else if (primary?.signal_name.includes("Multi-country")) {
+    painHypothesis = `INFERENCE: coordinating operations across ${c.countries_of_operation.length} countries typically forces a re-evaluation of whether each plant runs its own bespoke tooling or one standardized layer — a category-level pattern, not a confirmed statement from ${c.company_name}.`;
+    reasonNow = "Multi-country manufacturing groups are a known trigger point for standardizing on one platform before scale makes a per-site approach unmanageable.";
   } else {
     painHypothesis = `FACT: no strong buying signal was detected for ${c.company_name} in this dataset; any pain hypothesis here would be speculative.`;
     reasonNow = "Insufficient signal strength to justify a timing-based outreach angle right now.";
@@ -664,7 +693,7 @@ function generateAIReasoning(c, signals, score) {
     pain_hypothesis: painHypothesis,
     recommended_persona: identifyPersona(c, signals).persona,
     reason_to_contact_now: reasonNow,
-    outreach_angle: primary ? `Lead with the ${primary.signal_name.toLowerCase()} signal, tie it to identity/device sprawl risk, offer a scoped conversation — not a demo pitch.` : "Insufficient signal to justify outreach; hold for nurture.",
+    outreach_angle: primary ? `Lead with the ${primary.signal_name.toLowerCase()} signal, tie it to availability/quality/throughput risk on the floor, offer a scoped conversation — not a demo pitch.` : "Insufficient signal to justify outreach; hold for nurture.",
     confidence: detected.length >= 3 ? "high" : detected.length >= 1 ? "medium" : "low",
     missing_information: missing,
     source: "simulated"
@@ -675,70 +704,53 @@ function generateAIReasoning(c, signals, score) {
 // PHASE 7 — PERSONALIZED OUTREACH (<= ~80 words)
 // ---------------------------------------------------------------------------
 // Evidence strings from detectSignals() are pre-labeled, e.g.
-// `Security/IAM hiring or initiative referenced: "Open req found via Clay
-// for ..."`. Quoting the whole thing again in outreach copy nests the label
-// inside a second label ("saw this: Security/IAM hiring... referenced:
-// ..."). This strips one leading "Label —" / "Label:" prefix so the message
-// quotes the underlying fact instead of the internal citation label.
+// `Capex/new-plant signal on file: Brewer of ... Building a $760M ...`.
+// Quoting the whole thing again in outreach copy nests the label inside a
+// second label ("saw this: Capex/new-plant signal on file: ..."). This
+// strips one leading "Label:" prefix so the message quotes the underlying
+// fact instead of the internal citation label.
 function stripEvidenceLabel(evidenceText) {
   const m = /^[^:—]{0,60}[:—]\s*(.*)$/s.exec(evidenceText || "");
   let fact = (m ? m[1] : evidenceText || "").trim();
-  // Parentheticals in this data are sourcing metadata ("(Sep 2026)", "(quoted
-  // from a live X job listing)") — useful for an internal QA trail, never
-  // something you'd say to the actual prospect.
+  // Parentheticals in this data are sourcing metadata ("(Food Dive, 2026)",
+  // "(quoted from ...)") — useful for an internal QA trail, never something
+  // you'd say to the actual prospect.
   fact = fact.replace(/\([^)]*\)/g, " ").replace(/\s{2,}/g, " ").trim();
-  // Some evidence strings bundle several clauses with "; " — this demo's own
-  // ICP-scoring commentary ("headcount exceeds this demo's 2,000-employee
-  // ceiling"), and separately, internal research-process metadata (how a
-  // contact was found: "...was found via Clay contact search", "a verified
-  // work email"). Both are true and useful for QA, but neither is something
-  // you'd ever say to the actual prospect — a real outreach message quotes
-  // the company FACT (the hiring signal, the growth number), never how the
-  // seller's tooling found it. Keep only the first clause that isn't one of
-  // those, since that's reliably the actual signal itself.
+  // Some evidence strings bundle several clauses with "; " — internal
+  // research-process metadata alongside the actual fact. Keep only the
+  // first clause that isn't research-process narrative, since that's
+  // reliably the actual signal itself.
   const clauses = fact.split(/;\s*/).map(s => s.trim()).filter(Boolean)
-    .filter(clause => !/this demo|clay|verified work email|contact search/i.test(clause));
+    .filter(clause => !/no contact-enrichment tool|this pass|this demo/i.test(clause));
   fact = clauses[0] || "";
   return fact.replace(/\.+\s*$/, "").trim(); // caller adds its own trailing period
 }
 
-// Pulls just the quoted role title out of an evidence string (e.g. "Open
-// req found via Clay for \"Product Security Engineer\" (Sep 2026)" →
-// "Product Security Engineer"). This is the one piece of a messy, data-mixed
-// evidence string that's always safe and natural to say directly to a
-// prospect — everything else in these strings is internal sourcing
-// narrative, not customer-facing copy.
+// Pulls a short quoted dollar figure or plant/city name out of an evidence
+// string when one is present (e.g. "$760M brewing and bottling complex in
+// Apan, Hidalgo") — used to ground an outreach hook in the literal cited
+// fact instead of a paraphrase of the signal category.
 function extractQuotedRole(evidenceText) {
-  // Some evidence strings nest quotes two levels deep — a citation label
-  // wraps the whole underlying fact in quotes, and that fact itself quotes
-  // a role title again: Label: "Open req found via Clay for "Product
-  // Security Engineer" (Sep 2026)". A naive first-quoted-pair match grabs
-  // "Open req found via Clay for " (the wrong, outer pair). A role title is
-  // reliably Title Case (every word capitalized); a narrative fragment like
-  // "Open req found via Clay for" is not ("req", "found", "via" aren't), so
-  // requiring every word capitalized picks the real title regardless of
-  // which quote pair it's nested inside.
-  const matches = (evidenceText || "").match(/"([A-Z][a-zA-Z]*(?:\s[A-Z][a-zA-Z]*){0,4})"/g) || [];
-  if (matches.length === 0) return null;
-  return matches[matches.length - 1].replace(/"/g, "");
+  const m = /(\$[\d.,]+\s?(?:M|B|million|billion))/i.exec(evidenceText || "");
+  return m ? m[1] : null;
 }
 
-// Turns one buildWhyJumpCloud() reason (written for the account-detail page,
-// e.g. "Unified device management across Mac/Windows/Linux instead of
-// per-OS tooling.") into a first-person sentence naming JumpCloud, so the
-// outreach message actually answers the question a prospect always has:
-// why THIS vendor, not just "why now". Falls back to a generic mention if
-// no reason cleared (score too weak to draw a credible connection).
-function jumpCloudPitchLine(whyJumpCloud) {
-  const top = whyJumpCloud && whyJumpCloud[0];
+// Turns one buildWhyAllie() reason (written for the account-detail page,
+// e.g. "Standardizing on one AI-agent layer beats bespoke PLC/MES/ERP
+// integration per plant.") into a first-person sentence naming Allie, so the
+// outreach message actually answers the question a prospect always has: why
+// THIS vendor, not just "why now". Falls back to a generic mention if no
+// reason cleared (score too weak to draw a credible connection).
+function alliePitchLine(whyAllie) {
+  const top = whyAllie && whyAllie[0];
   if (!top || /no strong fit signal/i.test(top.attr)) {
-    return "JumpCloud unifies device and identity management into one platform instead of stitching together point tools.";
+    return "Allie integrates intelligence into factory operations — connecting to PLCs, MES and ERPs through secure edge gateways to detect problems, recommend actions and coordinate responses in real time.";
   }
   const reason = top.link.replace(/\.+\s*$/, "");
-  return `That's exactly what JumpCloud is built for: ${reason.charAt(0).toLowerCase() + reason.slice(1)}.`;
+  return `That's exactly what Allie is built for: ${reason.charAt(0).toLowerCase() + reason.slice(1)}.`;
 }
 
-function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
+function generateOutreach(c, signals, reasoning, persona, whyAllie) {
   const primary = reasoning.primary_signal;
   const evidence = signals.find(s => s.signal_name === primary)?.evidence || "";
   if (reasoning.confidence === "low") {
@@ -748,46 +760,46 @@ function generateOutreach(c, signals, reasoning, persona, whyJumpCloud) {
   const firstName = c.contact.name !== "unknown" ? c.contact.name.split(" ")[0] : null;
   const greeting = firstName ? `Hi ${firstName},` : "Hi,";
   const fact = stripEvidenceLabel(evidence);
+  const dollarFigure = extractQuotedRole(evidence);
 
   // Ground the opener in the literal cited fact where there is one — "saw
-  // the actual req/quote" reads as researched; a paraphrase of the signal
+  // the actual figure/plant" reads as researched; a paraphrase of the signal
   // category reads as a mail-merge. Phrasing avoids two things that read as
   // robotic in a first-touch message: naming HOW the fact was found ("saw
   // this at X:", a colon before a quote), and burying the ask three
   // sentences deep.
   let hook;
-  if (p.includes("hiring")) {
-    const role = extractQuotedRole(evidence);
-    hook = role ? `saw you have a ${role} req open` : (fact ? `saw ${c.company_name} is hiring for ${fact}` : `saw ${c.company_name} is hiring for IT/security`);
-  } else if (p.includes("remote") || p.includes("distributed")) {
-    hook = fact ? `noticed ${c.company_name}'s team is distributed: ${fact}` : `noticed ${c.company_name} runs a distributed team`;
-  } else if (p.includes("expansion") || p.includes("countries") || p.includes("offices")) {
-    hook = `noticed ${c.company_name} now has people across ${c.countries_of_operation.length} countries (${c.countries_of_operation.join(", ")})`;
-  } else if (p.includes("growth")) {
-    hook = `saw ${c.company_name} is growing fast (${c.estimated_growth})`;
+  if (p.includes("automation")) {
+    hook = fact ? `saw the automation/AI work already underway at ${c.company_name}: ${fact}` : `saw ${c.company_name} is already investing in plant automation`;
+  } else if (p.includes("plant") || p.includes("capex")) {
+    hook = dollarFigure ? `saw the ${dollarFigure} investment ${c.company_name} just committed to a new plant/expansion` : (fact ? `saw ${c.company_name}'s new plant/expansion: ${fact}` : `saw ${c.company_name}'s recent expansion capex`);
+  } else if (p.includes("layoffs") || p.includes("restructuring")) {
+    hook = fact ? `saw the restructuring at ${c.company_name}: ${fact}` : `saw ${c.company_name}'s recent restructuring`;
+  } else if (p.includes("multi-country")) {
+    hook = `noticed ${c.company_name} now runs plants across ${c.countries_of_operation.length} countries (${c.countries_of_operation.join(", ")})`;
   } else {
     hook = `came across ${c.company_name}`;
   }
 
-  // A VP doesn't move on "curious how you're handling this" — they move on
-  // a specific business reason wired to their actual scope (audit exposure,
-  // headcount they're accountable for, tool sprawl they inherited), stated
-  // plainly, with a low-friction next step that doesn't presume the sale.
-  // Length is deliberate: a one-liner reads as spray-and-pray; this reads as
-  // someone who looked at the account and thought about their role
-  // specifically, which is what actually earns a reply from a VP.
-  const pitch = jumpCloudPitchLine(whyJumpCloud);
-  const titleLower = (persona.contact_title || "your team").toLowerCase();
+  // A VP of Operations or Plant Director doesn't move on "curious how you're
+  // handling this" — they move on a specific business reason wired to their
+  // actual scope (unplanned downtime, quality deviations, changeover time,
+  // headcount they're accountable for), stated plainly, with a low-friction
+  // next step that doesn't presume the sale. Length is deliberate: a
+  // one-liner reads as spray-and-pray; this reads as someone who looked at
+  // the account and thought about their role specifically.
+  const pitch = alliePitchLine(whyAllie);
+  const titleLower = (persona.persona || "your team").toLowerCase();
   const message = `${greeting} ${hook.charAt(0).toUpperCase() + hook.slice(1)}.
 
-I'm reaching out from JumpCloud. We're the unified device and identity platform teams move to once managing access across a growing headcount stops being a single person's side project, which looks like the same shift ${c.company_name} is heading toward.
+I'm reaching out from Allie. We build AI agents for manufacturing — connecting to PLCs, MES and ERPs through secure edge gateways to turn raw floor data into operational decisions in real time, which looks like exactly the kind of investment ${c.company_name} is already moving toward.
 
 ${pitch}
 
-For someone in your seat, that usually shows up as three concrete things: one system of record for who has access to what (instead of reconstructing it for every audit or SOC 2 review), faster and safer onboarding/offboarding as ${c.company_name} keeps growing, and fewer standing point-tools for your team to patch and babysit.
+For someone in your seat, that usually shows up as three concrete things: fewer unplanned-downtime surprises because the system flags a developing problem before it stops the line, faster root-cause on quality deviations instead of a shift-end postmortem, and agents that coordinate the response instead of one more dashboard for your team to babysit.
 
-This isn't a decision to make from an email thread. If there's a real fit, a 20-minute call with one of our solutions engineers would show concretely where JumpCloud would plug into how ${titleLower} is set up at ${c.company_name} today.`;
-  const subject = `${c.company_name} + JumpCloud: closing the identity/device gap before it's an audit finding`;
+This isn't a decision to make from an email thread. If there's a real fit, a 20-minute call with one of our solutions engineers would show concretely where Allie would plug into how ${titleLower} runs the floor at ${c.company_name} today.`;
+  const subject = `${c.company_name} + Allie: catching downtime before it stops the line`;
   const cta = "Do you have 20 minutes in the next two weeks?";
   return { subject_line: subject, opening_line: `${greeting} ${hook}.`, message, call_to_action: cta, evidence_used: evidence };
 }
@@ -795,21 +807,23 @@ This isn't a decision to make from an email thread. If there's a real fit, a 20-
 // ---------------------------------------------------------------------------
 // PHASE 7b — SEQUENCE (Tier A only) + FEEDBACK LOOP RULES
 // Mirrors the "sourcing → contact → research → priority → personalization →
-// sequencing → engagement orchestration" flow the role description asks for.
+// sequencing → engagement orchestration" flow the role description asks for
+// (SYS03, outbound engine — email + LinkedIn shown here; the parallel
+// cold-calling engine is design-only, see README).
 // ---------------------------------------------------------------------------
 function buildSequence(c, signals, reasoning, persona) {
   const primary = reasoning.primary_signal;
-  const growthOrItAngle = (primary.toLowerCase().includes("hiring") || primary.toLowerCase().includes("growth"))
-    ? `Growth/leadership signal: ${primary.toLowerCase()}` : `Primary signal: ${primary.toLowerCase()}`;
+  const leadAngle = (primary.toLowerCase().includes("automation") || primary.toLowerCase().includes("plant") || primary.toLowerCase().includes("capex"))
+    ? `Growth/investment signal: ${primary.toLowerCase()}` : `Primary signal: ${primary.toLowerCase()}`;
   return {
     steps: [
-      { day: 1, channel: "Email", description: `${growthOrItAngle} — opening email personalized from ${persona.persona}'s likely priority.` },
+      { day: 1, channel: "Email", description: `${leadAngle} — opening email personalized from ${persona.persona}'s likely priority.` },
       { day: 3, channel: "LinkedIn", description: "Short connection note referencing the same signal, no pitch." },
-      { day: 6, channel: "Email", description: "Second email, different angle — identity/device sprawl risk framed around headcount or geography growth." },
-      { day: 10, channel: "Final touch", description: "Security/device-management insight (breach cost, audit friction, or compliance angle) as a break-up-style final message." }
+      { day: 6, channel: "Email", description: "Second email, different angle — downtime/quality/throughput risk framed around the new plant, capex or restructuring." },
+      { day: 10, channel: "Final touch", description: "Operational-risk insight (unplanned downtime cost, changeover time, or safety angle) as a break-up-style final message." }
     ],
     feedback_rules: [
-      { trigger: "Positive reply", action: "Stop all automation immediately — BDR takes the conversation." },
+      { trigger: "Positive reply", action: "Stop all automation immediately — technical sales takes the conversation." },
       { trigger: "Meeting booked", action: "Suppress all remaining automated outreach for this account." },
       { trigger: "No response after full sequence", action: "Pause outreach until a new signal is detected." },
       { trigger: "Not interested", action: "Suppress account / move to long-cycle nurture." }
@@ -819,21 +833,24 @@ function buildSequence(c, signals, reasoning, persona) {
 
 // ---------------------------------------------------------------------------
 // PHASE 8 — ROUTING ENGINE (deterministic, logged)
-// Routing depends on score AND evidence sufficiency AND contact readiness —
-// a high score with no named contact is a data-enrichment problem, not a
-// BDR-ready account.
+// Routing depends on score AND evidence sufficiency AND a mapped buyer
+// persona. Unlike a pass with real contact enrichment, this dataset has no
+// named contact for any account (see COMPANIES comment) — a BDR/technical-
+// sales handoff here means "signal-armed and persona-mapped, contact
+// discovery still to do," which is what "Route to BDR" means throughout
+// this demo's copy.
 // ---------------------------------------------------------------------------
 function routeAccount(c, signals, score) {
   const detectedCount = signals.filter(s => s.detected).length;
   const hasSufficientEvidence = detectedCount >= ICP_CONFIG.min_signals_for_evidence;
-  const hasContact = c.contact.name !== "unknown" && c.contact.email !== "unknown";
+  const personaMapped = identifyPersona(c, signals).persona !== "unknown";
 
   if (score.tier === "A") {
-    if (hasSufficientEvidence && hasContact) {
-      return { action: "Route to BDR", crm_status: "Synced to CRM · HIGH PRIORITY", queue: "BDR — immediate", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold}, ${detectedCount} signals detected, contact identified.` };
+    if (hasSufficientEvidence && personaMapped) {
+      return { action: "Route to BDR", crm_status: "Synced to CRM · HIGH PRIORITY", queue: "BDR — immediate", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold}, ${detectedCount} signals detected, buyer persona mapped (no named contact — see README on contact enrichment).` };
     }
-    if (!hasContact) {
-      return { action: "Contact enrichment", crm_status: "Synced to CRM · needs contact", queue: "Enrichment queue", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold} but no confirmed decision-maker contact on file — route to enrichment before BDR.` };
+    if (!personaMapped) {
+      return { action: "Contact enrichment", crm_status: "Synced to CRM · needs contact", queue: "Enrichment queue", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold} but no buyer persona could be mapped — route to enrichment before BDR.` };
     }
     return { action: "Nurture / research", crm_status: "Synced to CRM · nurture", queue: "Marketing nurture", reason: `Score ${score.total_score} ≥ ${ICP_CONFIG.tierA_threshold} but only ${detectedCount} signal(s) detected — below the ${ICP_CONFIG.min_signals_for_evidence}-signal evidence bar for a BDR handoff.` };
   }
@@ -851,28 +868,26 @@ function routeTagClass(action) {
 }
 
 // ---------------------------------------------------------------------------
-// "Why JumpCloud?" — connects enrichment attributes to the actual product
-// (unified identity + device + access), not a generic value prop.
+// "Why Allie?" — connects researched signals to the actual product (edge
+// gateways into PLC/MES/ERP, real-time monitoring → autonomous control,
+// availability/quality/throughput), not a generic value prop.
 // ---------------------------------------------------------------------------
-function buildWhyJumpCloud(c, signals) {
+function buildWhyAllie(c, signals) {
   const reasons = [];
-  if (/mac|windows|linux/i.test(c.technology_context) || /mixed/i.test(c.technology_context)) {
-    reasons.push({ attr: "Mixed-OS fleet", link: "Unified device management across Mac/Windows/Linux instead of per-OS tooling." });
+  if (signals.find(s => s.signal_name === "AI / automation initiative underway")?.detected) {
+    reasons.push({ attr: "Already investing in plant AI/automation", link: "Sitting on top of the sensor/PLC data an existing automation initiative already produces, coordinating the response instead of adding another isolated dashboard." });
+  }
+  if (signals.find(s => s.signal_name === "New plant or expansion capex committed")?.detected) {
+    reasons.push({ attr: "New plant or expansion capex committed", link: "Standing up one AI-agent layer across PLC/MES/ERP at a new or expanding site beats re-building bespoke integration and tribal-knowledge alarms at every plant." });
   }
   if (c.countries_of_operation.length > 1) {
-    reasons.push({ attr: `Operates in ${c.countries_of_operation.length} countries`, link: "Single identity provider avoids per-region IAM sprawl as they scale internationally." });
+    reasons.push({ attr: `Operates plants across ${c.countries_of_operation.length} countries`, link: "One platform that connects to PLCs/MES/ERPs via edge gateways scales the same agents across sites instead of a bespoke build per country." });
   }
-  if (signals.find(s => s.signal_name === "Remote or distributed workforce")?.detected) {
-    reasons.push({ attr: "Remote/hybrid workforce", link: "Cloud directory + device trust replaces on-prem AD/VPN assumptions that don't hold for distributed teams." });
-  }
-  if (signals.find(s => s.signal_name === "Cybersecurity / IAM hiring")?.detected) {
-    reasons.push({ attr: "Actively hiring for security/IAM", link: "A newly budgeted security hire is a natural buyer for a unified identity + access platform instead of stitching point solutions." });
-  }
-  if (signals.find(s => s.signal_name === "Rapid headcount growth")?.detected) {
-    reasons.push({ attr: "Fast headcount growth", link: "Growing headcount without unified onboarding/offboarding across identity + devices is where access sprawl and orphaned accounts start." });
+  if (signals.find(s => s.signal_name === "Layoffs or restructuring")?.detected) {
+    reasons.push({ attr: "Recent layoffs/restructuring", link: "Leaner plant teams need agents that detect problems and coordinate the response automatically, not more headcount watching dashboards." });
   }
   if (reasons.length === 0) {
-    reasons.push({ attr: "No strong fit signal detected", link: "Not enough evidence yet to draw a credible connection to JumpCloud's product — hold for more enrichment rather than force an angle." });
+    reasons.push({ attr: "No strong fit signal detected", link: "Not enough evidence yet to draw a credible connection to Allie's product — hold for more research rather than force an angle." });
   }
   return reasons;
 }
@@ -927,12 +942,12 @@ let LIVE_AI_CALL_COUNT = 0;
 // reasoning, Zapier webhook, HubSpot writes, the site-backend route-to-BDR
 // function) is logged here as it happens, success or failure. Nothing in
 // this log is simulated or backfilled — it starts with one historical entry
-// for the one-time Clay enrichment run that seeded the dataset (see README),
+// for the one-time web-research pass that seeded the dataset (see README),
 // and stays empty of call activity until a viewer actually triggers one of
 // the live integrations from an account detail page.
 // ---------------------------------------------------------------------------
 const SYSTEM_HEALTH_LOG = [
-  { ts: new Date("2026-09-04T00:00:00Z").toISOString(), system: "Clay Enrichment", account: "all 15 companies", status: "success", retry: false, detail: "One-time enrichment run that seeded this dataset (find-and-enrich-company + find-and-enrich-contacts-at-company). Historical — not re-run live by this app, so no retry/latency data was captured for it." }
+  { ts: new Date("2026-09-24T00:00:00Z").toISOString(), system: "Public signal research", account: "all 15 companies", status: "success", retry: false, detail: "One-time manual web-research pass that seeded this dataset (no Clay or other enrichment tool was available this pass — see README). Historical — not re-run live by this app, so no retry/latency data was captured for it." }
 ];
 function logHealth(system, account, status, detail, latencyMs) {
   SYSTEM_HEALTH_LOG.unshift({ ts: new Date().toISOString(), system, account, status, retry: false, detail, latency_ms: latencyMs });
@@ -953,7 +968,7 @@ function getModelEval(id) { return MODEL_EVAL[id] || (MODEL_EVAL[id] = { reasoni
 function buildAgentRun(c, signals, score, reasoning, persona, outreach, qa, routing) {
   const detectedCount = signals.filter(s => s.detected).length;
   const steps = [
-    { type: "engine", name: "Enrichment", detail: `Loaded Clay snapshot for ${c.company_name} (fetched ${c.last_enriched}) — ${c.countries_of_operation.length} countries on file.` },
+    { type: "engine", name: "Signal research", detail: `Loaded public-signal research for ${c.company_name} (compiled ${c.last_enriched}) — ${c.countries_of_operation.length} countries on file.` },
     { type: "engine", name: "Signal Detection", detail: `${detectedCount} of ${signals.length} candidate signals detected.` },
     { type: "engine", name: "ICP Scoring", detail: `Score ${score.total_score}/100 → Tier ${score.tier}.` },
     { type: "gate", name: "Qualification Gate", detail: score.tier === "C" ? "Score below the Tier B threshold — this account doesn't clear the bar to justify reasoning, persona work or outreach; the trace stops here." : "Score clears the gate — continuing to AI Reasoning." }
@@ -977,8 +992,8 @@ function buildAccountRecord(c) {
   const score = scoreAccount(c, signals);
   const persona = identifyPersona(c, signals);
   const reasoning = generateAIReasoning(c, signals, score);
-  const whyJumpCloud = buildWhyJumpCloud(c, signals);
-  const outreach = generateOutreach(c, signals, reasoning, persona, whyJumpCloud);
+  const whyAllie = buildWhyAllie(c, signals);
+  const outreach = generateOutreach(c, signals, reasoning, persona, whyAllie);
   const qa = qaCheckOutreach(signals, outreach, reasoning);
   const routing = routeAccount(c, signals, score);
   const sequence = buildSequence(c, signals, reasoning, persona);
@@ -994,7 +1009,7 @@ function buildAccountRecord(c) {
     qa,
     routing,
     sequence,
-    whyJumpCloud,
+    whyAllie,
     agentRun,
     timestamp: new Date().toISOString()
   };
@@ -1183,7 +1198,7 @@ function renderDashboard() {
   const wrap = el(`<div>
     <div class="page-head">
       <h1>Agentic Outbound Control Room</h1>
-      <p>From signal → deterministic scoring → governed AI reasoning → human-approved seller action. ${ACCOUNTS.length} real companies — candidate research compiled from public data via a live Clay enrichment run, not an active JumpCloud campaign. Open any account for its full Agent Run and Decision Trace.</p>
+      <p>From signal → deterministic scoring → governed AI reasoning → human-approved handoff to technical sales. ${ACCOUNTS.length} real Tier-1 manufacturers — candidate research compiled from public web research, not an active Allie campaign. Open any account for its full Agent Run and Decision Trace.</p>
     </div>
     <div class="kpi-grid">
       <div class="kpi"><div class="v">${ACCOUNTS.length}</div><div class="l">Total accounts</div></div>
@@ -1485,8 +1500,8 @@ function renderAccountDetail(id) {
             ${fieldRow("Headquarters", c.headquarters)}
             ${fieldRow("Countries of operation", fmtCountries(c.countries_of_operation))}
             ${fieldRow("Estimated growth", c.estimated_growth)}
-            ${fieldRow("Technology context", c.technology_context)}
-            ${fieldRow("Last enriched", `${c.last_enriched} (${daysSince(c.last_enriched)}d ago)`)}
+            ${fieldRow("Automation / signal context", c.technology_context)}
+            ${fieldRow("Last researched", `${c.last_enriched} (${daysSince(c.last_enriched)}d ago)`)}
           </div>
         </div>
 
@@ -1544,11 +1559,11 @@ function renderAccountDetail(id) {
         </div>` : ``}
 
         <div class="panel">
-          <div class="panel-head"><h2>Why JumpCloud?</h2></div>
+          <div class="panel-head"><h2>Why Allie?</h2></div>
           <div class="body-pad">
             <div class="jc-box">
               <ul>
-                ${a.whyJumpCloud.map(w => `<li><b>${esc(w.attr)}</b> — ${esc(w.link)}</li>`).join("")}
+                ${a.whyAllie.map(w => `<li><b>${esc(w.attr)}</b> — ${esc(w.link)}</li>`).join("")}
               </ul>
             </div>
           </div>
@@ -1801,11 +1816,11 @@ function renderSignals() {
 /* ---------------------------------------------------------------- ROUTING */
 function renderRouting() {
   const wrap = el(`<div>
-    <div class="page-head"><h1>Routing Log</h1><p>Deterministic rules, not the LLM, decide routing — every decision below is reproducible from the score, evidence count, and contact-readiness alone.</p></div>
+    <div class="page-head"><h1>Routing Log</h1><p>Deterministic rules, not the LLM, decide routing — every decision below is reproducible from the score, evidence count, and mapped buyer persona alone.</p></div>
     <div class="panel">
       <div class="body-pad" style="font-family:var(--font-mono);font-size:12.5px;color:var(--muted);line-height:1.9">
-        score ≥ ${ICP_CONFIG.tierA_threshold} + ≥${ICP_CONFIG.min_signals_for_evidence} signals + contact identified → <span style="color:var(--good)">Route to BDR</span><br>
-        score ≥ ${ICP_CONFIG.tierA_threshold} + no confirmed contact → <span style="color:var(--warn)">Contact enrichment</span><br>
+        score ≥ ${ICP_CONFIG.tierA_threshold} + ≥${ICP_CONFIG.min_signals_for_evidence} signals + persona mapped → <span style="color:var(--good)">Route to BDR</span><br>
+        score ≥ ${ICP_CONFIG.tierA_threshold} + no persona mapped → <span style="color:var(--warn)">Contact enrichment</span><br>
         score ${ICP_CONFIG.tierB_threshold}–${ICP_CONFIG.tierA_threshold - 1} (or Tier A with thin evidence) → <span style="color:var(--accent)">Nurture / research</span><br>
         score &lt; ${ICP_CONFIG.tierB_threshold} → <span style="color:var(--bad)">Suppress</span>
       </div>
@@ -2049,16 +2064,16 @@ function renderOutcomes() {
 
 /* ----------------------------------------------------------- SYSTEM HEALTH */
 // A visible failure/retry log for every real network call this app makes —
-// enrichment (the one-time Clay run), AI reasoning (live OpenAI calls), and
-// CRM sync (Zapier + HubSpot). Nothing here is fabricated: the log starts
-// with one historical entry for the Clay run and otherwise only grows when
-// a viewer actually triggers a live integration from an account's detail
-// page — logHealth() is called from those exact click handlers, success or
-// failure, so this page shows what really happened this session, not a
-// simulated uptime dashboard.
+// signal research (the one-time manual web-research pass), AI reasoning
+// (live OpenAI calls), and CRM sync (Zapier + HubSpot). Nothing here is
+// fabricated: the log starts with one historical entry for the research
+// pass and otherwise only grows when a viewer actually triggers a live
+// integration from an account's detail page — logHealth() is called from
+// those exact click handlers, success or failure, so this page shows what
+// really happened this session, not a simulated uptime dashboard.
 let healthFilter = "ALL";
 function renderSystemHealth() {
-  const liveEntries = SYSTEM_HEALTH_LOG.filter(e => e.system !== "Clay Enrichment");
+  const liveEntries = SYSTEM_HEALTH_LOG.filter(e => e.system !== "Public signal research");
   const successCount = liveEntries.filter(e => e.status === "success").length;
   const failureCount = liveEntries.filter(e => e.status === "failure").length;
   const successRate = liveEntries.length > 0 ? Math.round((successCount / liveEntries.length) * 100) : null;
@@ -2073,7 +2088,7 @@ function renderSystemHealth() {
       <div class="kpi"><div class="v">${successRate === null ? "—" : successRate + "%"}</div><div class="l">Success rate this session</div></div>
     </div>
 
-    ${liveEntries.length === 0 ? `<div class="icp-note">No live enrichment/AI/CRM call has been triggered yet this session — trigger "Run live AI reasoning", a Zapier webhook, a HubSpot sync, or "Trigger via site backend" from any account's detail page and it will appear below with real status and latency. The Clay enrichment run below is historical, not a live call this app can retry.</div>` : ""}
+    ${liveEntries.length === 0 ? `<div class="icp-note">No live enrichment/AI/CRM call has been triggered yet this session — trigger "Run live AI reasoning", a Zapier webhook, a HubSpot sync, or "Trigger via site backend" from any account's detail page and it will appear below with real status and latency. The signal-research entry below is historical, not a live call this app can retry.</div>` : ""}
 
     <div class="panel">
       <div class="panel-head"><h2>Call log</h2><span class="hint">newest first</span></div>
@@ -2100,8 +2115,8 @@ function renderSystemHealth() {
     tbody.innerHTML = "";
     if (rows.length === 0) { tbody.appendChild(el(`<tr><td colspan="6" style="color:var(--muted)">No entries match this filter.</td></tr>`)); return; }
     rows.forEach(entry => {
-      const statusClass = entry.system === "Clay Enrichment" ? "status-historical" : (entry.status === "success" ? "status-success" : "status-failure");
-      const statusLabel = entry.system === "Clay Enrichment" ? "historical" : entry.status;
+      const statusClass = entry.system === "Public signal research" ? "status-historical" : (entry.status === "success" ? "status-success" : "status-failure");
+      const statusLabel = entry.system === "Public signal research" ? "historical" : entry.status;
       tbody.appendChild(el(`<tr>
         <td>${new Date(entry.ts).toLocaleString()}</td>
         <td>${esc(entry.system)}</td>
@@ -2126,12 +2141,12 @@ function renderSystemHealth() {
 // "Qualification cost", not CAC — this tool never touches ad spend or deal
 // close data, so it has no basis to claim a real customer-acquisition-cost
 // number. What it CAN report honestly: the real AI spend already tracked
-// from live OpenAI calls this session, plus an operator-entered Clay credit
-// cost (this app has no live read on your Clay workspace's credit ledger,
-// so that input is yours to fill in from Clay's own usage dashboard rather
-// than a number this demo invents). Time-saved is a separate, clearly
-// labeled estimate, never folded into the cost figure.
-let ROI_INPUTS = { clay_cost_per_credit_usd: 0.01, clay_credits_used: 45, minutes_saved_per_account: 12 };
+// from live OpenAI calls this session, plus an optional operator-entered
+// enrichment-tool cost (this pass used none — no Clay/ZoomInfo access — so
+// the default is $0; a production deployment would fill this in from
+// whatever contact-enrichment tool it actually runs). Time-saved is a
+// separate, clearly labeled estimate, never folded into the cost figure.
+let ROI_INPUTS = { clay_cost_per_credit_usd: 0, clay_credits_used: 0, minutes_saved_per_account: 12 };
 function renderCostRoi() {
   const r = ROI_INPUTS;
   const tierA = ACCOUNTS.filter(a => a.score.tier === "A").length;
@@ -2142,14 +2157,14 @@ function renderCostRoi() {
   const hoursSaved = (ACCOUNTS.length * r.minutes_saved_per_account) / 60;
 
   const wrap = el(`<div>
-    <div class="page-head"><h1>Cost &amp; ROI</h1><p>Real cost per qualified account, built from actual Clay credit usage and this session's real AI spend — labeled separately from an illustrative time-saved estimate. Never called CAC: this tool doesn't touch ad spend or deal-close data, so it can't support that metric.</p></div>
-    <div class="icp-note">Clay credit usage and cost-per-credit below are operator inputs, not something this app can read live from your Clay workspace — replace the defaults with your workspace's actual usage for this run (Clay → Usage) before quoting this number externally. AI spend is real and already tracked from any live OpenAI calls triggered this session.</div>
+    <div class="page-head"><h1>Cost &amp; ROI</h1><p>Real cost per qualified account, built from this session's real AI spend plus an optional enrichment-tool cost input — labeled separately from an illustrative time-saved estimate. Never called CAC: this tool doesn't touch ad spend or deal-close data, so it can't support that metric.</p></div>
+    <div class="icp-note">This pass used no paid enrichment tool (no Clay/ZoomInfo access — all signal research was manual, see README), so the enrichment-cost inputs below default to $0. If you plug this pipeline into a real enrichment tool in production, replace them with that tool's actual usage before quoting this number externally. AI spend is real and already tracked from any live OpenAI calls triggered this session.</div>
 
     <div class="panel">
-      <div class="panel-head"><h2>Inputs</h2><span class="hint">edit to match your actual Clay usage for this run</span></div>
+      <div class="panel-head"><h2>Inputs</h2><span class="hint">edit to match a real enrichment tool's usage, if you add one</span></div>
       <div class="body-pad">
-        <div class="cfg-row"><span>Clay cost per credit (USD)</span><input type="number" step="0.001" id="roi-credit-cost" value="${r.clay_cost_per_credit_usd}"></div>
-        <div class="cfg-row"><span>Clay credits used (this run, 15 companies)</span><input type="number" id="roi-credits-used" value="${r.clay_credits_used}"></div>
+        <div class="cfg-row"><span>Enrichment-tool cost per credit (USD)</span><input type="number" step="0.001" id="roi-credit-cost" value="${r.clay_cost_per_credit_usd}"></div>
+        <div class="cfg-row"><span>Enrichment-tool credits used (this run, 15 companies)</span><input type="number" id="roi-credits-used" value="${r.clay_credits_used}"></div>
         <div class="cfg-row"><span>Est. analyst minutes saved per account (manual research vs. this pipeline)</span><input type="number" id="roi-minutes-saved" value="${r.minutes_saved_per_account}"></div>
       </div>
       <div class="cfg-actions"><button class="btn primary" id="roi-apply">Recalculate</button></div>
@@ -2159,14 +2174,14 @@ function renderCostRoi() {
       <div class="panel-head"><h2>Qualification cost (real)</h2></div>
       <div class="body-pad">
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0">
-          <div class="kpi"><div class="v">$${clayCost.toFixed(2)}</div><div class="l">Clay enrichment cost (from inputs above)</div></div>
+          <div class="kpi"><div class="v">$${clayCost.toFixed(2)}</div><div class="l">Enrichment-tool cost (from inputs above; $0 this pass)</div></div>
           <div class="kpi"><div class="v">$${LIVE_AI_SPEND_USD.toFixed(4)}</div><div class="l">AI spend this session (real, tracked)</div></div>
           <div class="kpi"><div class="v">$${costPerEvaluated.toFixed(2)}</div><div class="l">Cost per account evaluated</div></div>
           <div class="kpi"><div class="v tier-a">${costPerQualified === null ? "—" : "$" + costPerQualified.toFixed(2)}</div><div class="l">Cost per qualified (Tier A) account</div></div>
         </div>
       </div>
     </div>
-    <div class="icp-note">"Qualified" here means Tier A — score, evidence and a named contact all cleared the bar. This is a qualification cost: what it took to find and prioritize an account worth a BDR's time. It is not a customer-acquisition cost, which would need real ad/campaign spend and closed-deal data this tool never sees.</div>
+    <div class="icp-note">"Qualified" here means Tier A — score, evidence and a mapped buyer persona all cleared the bar (no named contact — see README on why this pass has none). This is a qualification cost: what it took to find and prioritize an account worth a technical-sales handoff. It is not a customer-acquisition cost, which would need real ad/campaign spend and closed-deal data this tool never sees.</div>
 
     <div class="panel">
       <div class="panel-head"><h2>Time saved (estimate)</h2><span class="hint">labeled as an estimate — not a measured number</span></div>
@@ -2192,8 +2207,8 @@ function renderCostRoi() {
 function renderConfig() {
   const cfg = ICP_CONFIG;
   const wrap = el(`<div>
-    <div class="page-head"><h1>ICP Configuration</h1><p>These are illustrative scoring assumptions for this prototype, not JumpCloud's internal qualification criteria. All weights, thresholds, geos and industries below are editable and only affect this demo session.</p></div>
-    <div class="icp-note">Nothing on this page represents a real JumpCloud ICP document. It exists to show the scoring model is configurable rather than hardcoded opinion.</div>
+    <div class="page-head"><h1>ICP Configuration</h1><p>These are illustrative scoring assumptions for this prototype, not Allie's internal qualification criteria. All weights, thresholds, geos and industries below are editable and only affect this demo session.</p></div>
+    <div class="icp-note">Nothing on this page represents a real Allie ICP document. It exists to show the scoring model is configurable rather than hardcoded opinion.</div>
     <div class="panel">
       <div class="panel-head"><h2>Thresholds &amp; bands</h2></div>
       <div class="body-pad">
@@ -2207,17 +2222,17 @@ function renderConfig() {
     <div class="panel">
       <div class="panel-head"><h2>Signal weights</h2></div>
       <div class="body-pad">
-        <div class="cfg-row"><span>IT/security hiring</span><input type="number" id="w-it-security" value="${cfg.weights.signals.it_security_hiring}"></div>
-        <div class="cfg-row"><span>Remote/hybrid workforce</span><input type="number" id="w-remote" value="${cfg.weights.signals.remote_hybrid}"></div>
-        <div class="cfg-row"><span>Growing headcount</span><input type="number" id="w-growth" value="${cfg.weights.signals.growing_headcount}"></div>
-        <div class="cfg-row"><span>Geographic expansion</span><input type="number" id="w-geo" value="${cfg.weights.signals.geo_expansion}"></div>
+        <div class="cfg-row"><span>AI / automation initiative</span><input type="number" id="w-it-security" value="${cfg.weights.signals.automation_ai}"></div>
+        <div class="cfg-row"><span>New plant / expansion capex</span><input type="number" id="w-remote" value="${cfg.weights.signals.capex_new_plant}"></div>
+        <div class="cfg-row"><span>Layoffs / restructuring</span><input type="number" id="w-growth" value="${cfg.weights.signals.layoffs_restructuring}"></div>
+        <div class="cfg-row"><span>Headcount / growth trend confirmed</span><input type="number" id="w-geo" value="${cfg.weights.signals.headcount_growth}"></div>
       </div>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>Target geographies</h2></div>
       <div class="body-pad">
         <div class="cfg-checks" id="geo-chips">
-          ${["US","CA","UK","GB","DE","CH","AU","SG","FR","MX","JP","PK","IN","TW"].map(g => `<span class="cfg-chip ${cfg.target_geos.includes(g) ? "on" : ""}" data-geo="${g}">${g}</span>`).join("")}
+          ${["US","MX","BR","AR","CO","PE","CL","UY","CR","PA","GT","EC","CA","GB"].map(g => `<span class="cfg-chip ${cfg.target_geos.includes(g) ? "on" : ""}" data-geo="${g}">${g}</span>`).join("")}
         </div>
       </div>
     </div>
@@ -2241,13 +2256,13 @@ function renderConfig() {
   wrap.querySelector("#apply-cfg").addEventListener("click", () => {
     ICP_CONFIG.headcount_min = parseInt(wrap.querySelector("#cfg-hc-min").value, 10) || 0;
     ICP_CONFIG.headcount_max = parseInt(wrap.querySelector("#cfg-hc-max").value, 10) || 999999;
-    ICP_CONFIG.tierA_threshold = parseInt(wrap.querySelector("#cfg-tierA").value, 10) || 80;
-    ICP_CONFIG.tierB_threshold = parseInt(wrap.querySelector("#cfg-tierB").value, 10) || 60;
+    ICP_CONFIG.tierA_threshold = parseInt(wrap.querySelector("#cfg-tierA").value, 10) || 75;
+    ICP_CONFIG.tierB_threshold = parseInt(wrap.querySelector("#cfg-tierB").value, 10) || 55;
     ICP_CONFIG.min_signals_for_evidence = parseInt(wrap.querySelector("#cfg-minsig").value, 10) || 2;
-    ICP_CONFIG.weights.signals.it_security_hiring = parseInt(wrap.querySelector("#w-it-security").value, 10) || 0;
-    ICP_CONFIG.weights.signals.remote_hybrid = parseInt(wrap.querySelector("#w-remote").value, 10) || 0;
-    ICP_CONFIG.weights.signals.growing_headcount = parseInt(wrap.querySelector("#w-growth").value, 10) || 0;
-    ICP_CONFIG.weights.signals.geo_expansion = parseInt(wrap.querySelector("#w-geo").value, 10) || 0;
+    ICP_CONFIG.weights.signals.automation_ai = parseInt(wrap.querySelector("#w-it-security").value, 10) || 0;
+    ICP_CONFIG.weights.signals.capex_new_plant = parseInt(wrap.querySelector("#w-remote").value, 10) || 0;
+    ICP_CONFIG.weights.signals.layoffs_restructuring = parseInt(wrap.querySelector("#w-growth").value, 10) || 0;
+    ICP_CONFIG.weights.signals.headcount_growth = parseInt(wrap.querySelector("#w-geo").value, 10) || 0;
     ICP_CONFIG.target_geos = [...wrap.querySelectorAll("#geo-chips .cfg-chip.on")].map(c => c.dataset.geo);
     ICP_CONFIG.target_industries = [...wrap.querySelectorAll("#ind-chips .cfg-chip.on")].map(c => c.dataset.ind);
     recomputePipeline();
@@ -2265,7 +2280,7 @@ function renderConfig() {
 /* ------------------------------------------------------------ ARCHITECTURE */
 const PIPELINE_FLOW = [
   { type: "engine", name: "Source", detail: "A new target account comes in — from a CSV upload, a form, or an API call in a production build." },
-  { type: "engine", name: "Enrich", detail: "Company data is pulled in — in this demo, from a one-time Clay run against real companies, not a live per-visit call." },
+  { type: "engine", name: "Enrich", detail: "Company data is pulled in — in this demo, from a one-time manual web-research pass against real companies (no enrichment tool available), not a live per-visit call." },
   { type: "engine", name: "Detect signals", detail: "A deterministic rules engine checks the enrichment data for buying signals. No AI is involved in this step." },
   { type: "engine", name: "Score", detail: "Each signal and firmographic detail adds or subtracts points, using fixed, configurable weights — see ICP Config." },
   { type: "gate", name: "Gate", branch: "continues only if the score clears the Tier B threshold", detail: "Is this account worth spending AI compute and a seller's attention on? Accounts that don't clear the bar stop here." },
@@ -2289,13 +2304,13 @@ const MCP_TOOLS = [
 
 function renderArchitecture() {
   const wrap = el(`<div>
-    <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its enrichment is a real one-time Clay run against real companies, and a viewer can opt into a real OpenAI reasoning call (server-side, via a Netlify Function) and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
+    <div class="page-head"><h1>System Architecture</h1><p>This build runs entirely client-side, but its signal research is a real one-time manual web-research pass against real companies, and a viewer can opt into a real OpenAI reasoning call (server-side, via a Netlify Function) and a real Zapier/HubSpot sync per account — all without changing anything in the scoring or routing logic downstream.</p></div>
 
     <div class="panel">
       <div class="panel-head"><h2>The system, in one glance</h2><span class="hint">read left to right — this is the whole idea</span></div>
       <div class="body-pad">
         <div class="glance-row">
-          <div class="glance-card data"><span class="emoji">📥</span><h4>Real data in</h4><p>Clay pulls real firmographic and hiring data for each company — a one-time snapshot in this demo, a live feed in production.</p></div>
+          <div class="glance-card data"><span class="emoji">📥</span><h4>Real data in</h4><p>Public web research pulls real capex/plant/layoff signals for each company — a one-time manual pass in this demo, a live Clay/ZoomInfo-style feed in production.</p></div>
           <div class="glance-arrow">→</div>
           <div class="glance-card engine"><span class="emoji">⚙️</span><h4>Deterministic engine</h4><p>Fixed rules turn that data into buying signals, a 0–100 score, and a tier. Reproducible, no AI involved, no randomness.</p></div>
           <div class="glance-arrow">→</div>
@@ -2323,16 +2338,16 @@ function renderArchitecture() {
     <div class="panel">
       <div class="panel-head"><h2>How this would connect in production</h2></div>
       <div class="body-pad">
-        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">In a live build, the moment Clay finishes enriching a company, that automatically kicks off qualification — no one has to click a button. Zapier is an optional no-code layer for teams who'd rather configure that hand-off visually instead of writing the connecting code themselves.</p>
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">In a live build, the moment a signal-enrichment tool (e.g. Clay, ZoomInfo, or a custom scraper watching named accounts) finishes enriching a company, that automatically kicks off qualification — no one has to click a button. Zapier is an optional no-code layer for teams who'd rather configure that hand-off visually instead of writing the connecting code themselves.</p>
         <div class="mini-flow">
-          <div class="mf-node">Clay finishes enrichment</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Enrichment tool finishes a signal pass</div><div class="mf-arrow">→</div>
           <div class="mf-node">Auto-triggers qualification</div><div class="mf-arrow">→</div>
           <div class="mf-node">Score + AI reasoning</div><div class="mf-arrow">→</div>
           <div class="mf-node">CRM + Zapier</div>
         </div>
         <div class="tech-ref">
           <span class="k">For developers</span> — the API surface this maps to (designed, not live in this static demo):<br>
-          POST /api/webhook/clay — receive Clay enrichment, auto-trigger qualification<br>
+          POST /api/webhook/signals — receive enrichment-tool output, auto-trigger qualification<br>
           POST /api/qualify — run enrichment → signals → score → AI reasoning<br>
           POST /api/accounts — create a target account &nbsp;·&nbsp; GET /api/accounts — list with scores &nbsp;·&nbsp; GET /api/accounts/:id — full record<br>
           POST /api/accounts/:id/route — re-run the routing decision
@@ -2343,11 +2358,11 @@ function renderArchitecture() {
     <div class="panel">
       <div class="panel-head"><h2>Trigger-based outbound: dynamic re-prioritization</h2><span class="hint">event → agent run, not a static database</span></div>
       <div class="body-pad">
-        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">Scoring in this demo runs once, against a single Clay snapshot. In production the same engine re-runs whenever a signal changes — a tier is a live output, not a label an account keeps forever. Illustrative example, not a real event that fired:</p>
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--muted)">Scoring in this demo runs once, against a single manual research pass. In production the same engine re-runs whenever a signal changes — a tier is a live output, not a label an account keeps forever. Illustrative example, not a real event that fired:</p>
         <div class="mini-flow">
-          <div class="mf-node">New signal detected — PostHog opens 3 Security roles</div><div class="mf-arrow">→</div>
+          <div class="mf-node">New signal detected — a Tier B account announces a new plant</div><div class="mf-arrow">→</div>
           <div class="mf-node">Signal Agent updates the account record</div><div class="mf-arrow">→</div>
-          <div class="mf-node">Qualification engine recomputes: 72 → 82</div><div class="mf-arrow">→</div>
+          <div class="mf-node">Qualification engine recomputes: 65 → 80</div><div class="mf-arrow">→</div>
           <div class="mf-node">Tier B → Tier A</div><div class="mf-arrow">→</div>
           <div class="mf-node">Contact enrichment + research agents activate</div><div class="mf-arrow">→</div>
           <div class="mf-node">Draft generated, held for human approval</div>
@@ -2384,9 +2399,9 @@ function renderArchitecture() {
           <thead><tr><th>Component</th><th>Today (this demo)</th><th>Production equivalent</th></tr></thead>
           <tbody>
             <tr>
-              <td>Enrichment</td>
-              <td><span class="live-dot"></span>Clay, a real one-time snapshot across all 15 accounts</td>
-              <td><span class="design-dot"></span>Clay via webhook, refreshed continuously instead of once</td>
+              <td>Enrichment (SYS01/SYS02)</td>
+              <td><span class="live-dot"></span>Manual public web research, a real one-time pass across all 15 accounts (no enrichment tool available this pass)</td>
+              <td><span class="design-dot"></span>Clay/ZoomInfo-style enrichment + a named-account watchlist, refreshed continuously instead of once; website de-anonymization (e.g. RB2B/Clearbit Reveal) scoring visitors against closed-won</td>
             </tr>
             <tr>
               <td>Signals &amp; scoring</td>
@@ -2404,14 +2419,34 @@ function renderArchitecture() {
               <td><span class="live-dot"></span>Same code — nothing to change for production</td>
             </tr>
             <tr>
-              <td>Sequencing &amp; nurture</td>
-              <td><span class="live-dot"></span>Built-in demo sequence, Tier A accounts only</td>
-              <td><span class="design-dot"></span>Gong Engage for sequencing, Marketo for nurture</td>
+              <td>Sequencing &amp; nurture (SYS03)</td>
+              <td><span class="live-dot"></span>Built-in demo sequence, Tier A accounts only — email + LinkedIn steps</td>
+              <td><span class="design-dot"></span>Gong Engage or Outreach/Salesloft for sequencing, Marketo for nurture</td>
+            </tr>
+            <tr>
+              <td>Mail infra &amp; parallel dialer (SYS03)</td>
+              <td><span class="live-dot" style="background:var(--muted)"></span>Not built — a static demo can't run mail warm-up or place calls</td>
+              <td><span class="design-dot"></span>Dedicated sending domains + warm-up (e.g. Instantly/Smartlead) feeding the same sequence engine; a parallel-dialer API (e.g. Orum/Nooks) logging outcomes straight to CRM, back-to-back with no idle time between calls</td>
+            </tr>
+            <tr>
+              <td>Inbound &amp; content / AEO (SYS04)</td>
+              <td><span class="live-dot" style="background:var(--muted)"></span>Not built — no content calendar or publishing pipeline in this demo</td>
+              <td><span class="design-dot"></span>Claude Code drafts ICP-filtered posts from real signals in this dataset; a publishing calendar/cadence tracked in a lightweight CMS or the CRM itself; AEO tracked via prompts run against major AI assistants, checking whether Allie surfaces as an answer for "cutting unplanned downtime"</td>
+            </tr>
+            <tr>
+              <td>Events (SYS05)</td>
+              <td><span class="live-dot" style="background:var(--muted)"></span>Not built — no event calendar or booking sequence in this demo</td>
+              <td><span class="design-dot"></span>Named-account target lists built from this same ICP scorer, filtered to attendee lists per show; booking sequences 4-6 weeks out; on-site capture (e.g. a scanned badge → CRM webhook) same day; post-event auto-enrollment into sequence within 48h; per-event pipeline reporting in the CRM to decide which shows to keep</td>
+            </tr>
+            <tr>
+              <td>Deal support &amp; feedback (SYS06)</td>
+              <td><span class="live-dot"></span>Deterministic feedback rules (reply/meeting/silence → pause or stop); AI Ops Console prioritization as a partial analog</td>
+              <td><span class="design-dot"></span>Auto-generated pre-call brief per meeting (account signals + persona + why-now, already computed here); call-recording analysis (e.g. Gong/Chorus) feeding detected objections back into sequence copy and qualification weights; a versioned collateral library</td>
             </tr>
             <tr>
               <td>CRM &amp; orchestration</td>
               <td><span class="live-dot"></span>Real Zapier webhook + real HubSpot write (your credentials, or the site's via <span class="tag">/.netlify/functions/route-to-bdr</span>)</td>
-              <td><span class="design-dot"></span>Salesforce as system of record, credentials held server-side only</td>
+              <td><span class="design-dot"></span>Salesforce (or HubSpot) as system of record, credentials held server-side only</td>
             </tr>
             <tr>
               <td>Deployment</td>
@@ -2473,7 +2508,7 @@ function renderArchitecture() {
       </div>
     </div>
 
-    <div class="simulated-note">All 15 companies above are real, chosen as illustrative JumpCloud-shaped candidates and enriched via a live Clay run for portfolio purposes — this is candidate research, not an active JumpCloud outbound campaign, and none of these companies have been contacted. No real BDR performance data is used or implied.</div>
+    <div class="simulated-note">All 15 companies above are real Tier-1 manufacturers in brewing, food & beverage and CPG, researched via public web sources for portfolio purposes — this is candidate research, not an active Allie outbound campaign, and none of these companies have been contacted. No contact-enrichment tool was used, so no account has a named/verified contact (see README); no real BDR or technical-sales performance data is used or implied.</div>
   </div>`);
 
   const psNodes = wrap.querySelectorAll(".ps-node");

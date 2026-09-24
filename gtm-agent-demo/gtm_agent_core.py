@@ -29,58 +29,58 @@ CRM_FILE = Path(__file__).parent / "crm_demo.json"
 
 CUENTAS_DEMO = [
     {
-        "nombre": "Acme Textiles (Demo)",
-        "industria": "Manufactura",
-        "empleados": 800,
+        "nombre": "Altiplano Brewing Group (Demo)",
+        "industria": "Cerveceria",
+        "empleados": 8000,
         "pais": "Mexico",
-        "stack_actual": ["Active Directory", "servidores on-prem"],
+        "stack_actual": ["PLC/SCADA por planta, sin capa central", "MES en una sola linea"],
         "senales_compra": [
-            "Solicito una demo de seguridad de identidad",
-            "Visito la pagina de precios tres veces en una semana",
-            "Crecio su equipo de TI un 20% este trimestre",
+            "Solicito una demo de agentes de IA para planta",
+            "Anuncio una nueva planta / expansion de capex",
+            "Crecio su equipo de operaciones un 20% este trimestre",
         ],
     },
     {
-        "nombre": "Nebula Software (Demo)",
-        "industria": "SaaS",
-        "empleados": 120,
+        "nombre": "Nebula Snacks Co (Demo)",
+        "industria": "Snacks / CPG",
+        "empleados": 12000,
         "pais": "Colombia",
-        "stack_actual": ["Okta", "Google Workspace"],
+        "stack_actual": ["MES moderno", "ERP integrado"],
         "senales_compra": [
-            "Descargo un whitepaper sobre Zero Trust",
+            "Descargo un whitepaper sobre mantenimiento predictivo",
         ],
     },
     {
-        "nombre": "Grupo Andino Retail (Demo)",
-        "industria": "Retail",
-        "empleados": 3000,
+        "nombre": "Grupo Andino Dairy (Demo)",
+        "industria": "Lacteos",
+        "empleados": 30000,
         "pais": "Peru",
-        "stack_actual": ["sin directorio central", "sin MDM"],
+        "stack_actual": ["sin integracion PLC/MES/ERP", "sin monitoreo en tiempo real"],
         "senales_compra": [
-            "Tuvo un incidente de seguridad reportado en prensa",
-            "Contrato un nuevo CISO",
+            "Tuvo un paro de linea no planificado reportado en prensa",
+            "Contrato un nuevo VP de Operaciones",
         ],
     },
     {
-        "nombre": "Constructora del Valle (Demo)",
-        "industria": "Construccion",
-        "empleados": 60,
+        "nombre": "Valle Bottling Co (Demo)",
+        "industria": "Embotelladora",
+        "empleados": 6000,
         "pais": "Chile",
-        "stack_actual": ["Active Directory", "varias herramientas de identidad sueltas"],
+        "stack_actual": ["PLC por planta", "varias herramientas de monitoreo sueltas"],
         "senales_compra": [
-            "Publico una vacante para Administrador de TI",
+            "Publico una vacante para Director de Planta",
         ],
     },
     {
-        "nombre": "FinTech Horizonte (Demo)",
-        "industria": "Fintech",
-        "empleados": 250,
+        "nombre": "Horizonte Foods Group (Demo)",
+        "industria": "Alimentos y bebidas",
+        "empleados": 25000,
         "pais": "Argentina",
-        "stack_actual": ["Active Directory", "servidores on-prem", "varias herramientas de acceso"],
+        "stack_actual": ["PLC/SCADA por planta", "servidores on-prem", "varias herramientas de monitoreo"],
         "senales_compra": [
-            "Solicito una cotizacion enterprise",
-            "Asistio a un webinar de compliance",
-            "Busco 'MFA' en su propio sitio de soporte",
+            "Solicito una cotizacion enterprise multi-planta",
+            "Asistio a un webinar de reduccion de downtime",
+            "Busco 'OEE' en su propio sitio de soporte",
         ],
     },
 ]
@@ -96,16 +96,16 @@ def _buscar_cuenta(nombre: str) -> dict | None:
 
 def _puntaje_stack(stack_actual: list[str]) -> tuple[int, str]:
     texto = " ".join(stack_actual).lower()
-    dolor_alto = ["active directory", "on-prem", "varias herramientas"]
-    dolor_medio = ["sin directorio central", "sin mdm"]
-    modernas = ["okta", "azure ad", "entra id", "google workspace", "jumpcloud", "onelogin"]
+    dolor_alto = ["plc por planta", "plc/scada por planta", "on-prem", "varias herramientas"]
+    dolor_medio = ["sin integracion plc/mes/erp", "sin monitoreo en tiempo real"]
+    modernas = ["mes moderno", "erp integrado", "monitoreo en tiempo real"]
 
     if any(k in texto for k in dolor_alto):
-        return 30, "stack con dolor alto (Active Directory, on-prem o varias herramientas sueltas)"
+        return 30, "stack con dolor alto (PLC/SCADA aislado por planta, on-prem o varias herramientas sueltas)"
     if any(k in texto for k in dolor_medio):
-        return 20, "sin directorio central o sin MDM (dolor medio)"
+        return 20, "sin integracion PLC/MES/ERP o sin monitoreo en tiempo real (dolor medio)"
     if any(k in texto for k in modernas):
-        return 8, "ya usa un stack de identidad moderno (dolor bajo)"
+        return 8, "ya usa un stack de manufactura moderno (dolor bajo)"
     return 8, "stack no clasificado, se asume dolor bajo"
 
 
@@ -113,9 +113,9 @@ def _calcular_score(cuenta: dict) -> dict:
     razones = []
 
     empleados = cuenta["empleados"]
-    if 50 <= empleados <= 1500:
+    if 5000 <= empleados <= 400000:
         pts_tamano = 25
-        razones.append(f"tamano ideal ({empleados} empleados): +25")
+        razones.append(f"tamano ideal para manufactura Tier-1 ({empleados} empleados): +25")
     else:
         pts_tamano = 5
         razones.append(f"tamano fuera de rango ideal ({empleados} empleados): +5")
@@ -131,7 +131,7 @@ def _calcular_score(cuenta: dict) -> dict:
 
     if score >= 75:
         tier = "A"
-        ruteo = "SDR humano"
+        ruteo = "Technical sales"
     elif score >= 50:
         tier = "B"
         ruteo = "Nurture automatico"

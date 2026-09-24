@@ -10,28 +10,36 @@
 // Safety: the client cannot send arbitrary company/contact data — this
 // function only accepts an `account_id` and looks up everything else from
 // the ACCOUNTS table below, which is restricted to the accounts that
-// actually clear the deterministic Tier A + evidence + contact gate. This
+// actually clear the deterministic Tier A + evidence + persona gate. This
 // mirrors the same gate the client-side scorer enforces, just re-asserted
 // server-side so a crafted request can't spam arbitrary data into a real
 // Zapier zap or a real CRM.
+//
+// CONTACT HONESTY NOTE: unlike a pass with a real contact-enrichment tool
+// (Clay/ZoomInfo/LinkedIn Sales Navigator), this portfolio pass had none
+// available, so no account below has a named, verified individual contact.
+// contact_name/contact_title are a role-based placeholder ("Operations
+// Leadership" / the inferred buyer persona), never a fabricated named
+// person — see README for why. That placeholder is what gets written to
+// your HubSpot/Zapier if you trigger this button.
 const ACCOUNTS = {
-  acc_07: {
-    company_name: "Vercel", website: "vercel.com", icp_score: 85, tier: "A",
-    primary_signal: "Cybersecurity / IAM hiring — real open req: \"Product Security Engineer\"",
-    persona: "VP of Security", contact_name: "Mukund S.", contact_title: "VP of Security",
-    contact_email: "s@vercel.com"
+  acc_05: {
+    company_name: "Molson Coors", website: "molsoncoors.com", icp_score: 95, tier: "A",
+    primary_signal: "AI / automation initiative underway — confirmed AI-driven fermentation monitoring and automated logistics at the Golden, CO brewery, plus a $450M 2026 automation/cost-savings program",
+    persona: "CTO / VP of Digital Manufacturing", contact_name: "Operations Leadership", contact_title: "VP of Operations (role-based — no named contact identified this pass)",
+    contact_email: "no-named-contact@example-placeholder.invalid"
   },
-  acc_08: {
-    company_name: "PostHog", website: "posthog.com", icp_score: 80, tier: "A",
-    primary_signal: "Remote or distributed workforce — quoted from a live job posting: \"we're a natively remote company\"",
-    persona: "IT Operations Director", contact_name: "Felipe Almeida", contact_title: "Security Engineer",
-    contact_email: "felipe.a@posthog.com"
+  acc_06: {
+    company_name: "Nestlé", website: "nestle.com", icp_score: 85, tier: "A",
+    primary_signal: "AI / automation initiative underway — new System Technology Center (Orbe, opened H1 2026) developing AI/robotics/sensors for manufacturing, stated ambition for fully autonomous AI-powered plants",
+    persona: "CTO / VP of Digital Manufacturing", contact_name: "Operations Leadership", contact_title: "VP of Operations (role-based — no named contact identified this pass)",
+    contact_email: "no-named-contact@example-placeholder.invalid"
   },
-  acc_09: {
-    company_name: "Buffer", website: "buffer.com", icp_score: 80, tier: "A",
-    primary_signal: "Remote or distributed workforce — real employees found across Sri Lanka, Estonia and Portugal",
-    persona: "IT Operations Director", contact_name: "Adnan Issadeen", contact_title: "Security Engineer",
-    contact_email: "adnan@buffer.com"
+  acc_14: {
+    company_name: "Mondelez International", website: "mondelezinternational.com", icp_score: 95, tier: "A",
+    primary_signal: "AI / automation initiative underway — $130M installing four new advanced manufacturing lines at the Salinas, Mexico facility, replacing older Chicago production",
+    persona: "CTO / VP of Digital Manufacturing", contact_name: "Operations Leadership", contact_title: "VP of Operations (role-based — no named contact identified this pass)",
+    contact_email: "no-named-contact@example-placeholder.invalid"
   }
 };
 
